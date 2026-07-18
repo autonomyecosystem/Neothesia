@@ -1,7 +1,8 @@
 use std::time::Duration;
 
 use cyma_core::{
-    HarmonicState, MidiEvent as CymaMidiEvent, MidiInputError, MidiState, SmoothedHarmonicState,
+    HarmonicState, MidiEvent as CymaMidiEvent, MidiInputError, MidiState, ModalField,
+    SmoothedHarmonicState,
 };
 use midi_file::midly::MidiMessage;
 
@@ -65,12 +66,17 @@ impl CymaState {
         runtime
             .smoothed
             .advance(&runtime.target, delta.as_secs_f32(), response_seconds);
+        runtime.modal = ModalField::from_harmonic(runtime.smoothed.current());
     }
 
     pub fn harmonic_state(&self) -> Option<&HarmonicState> {
         self.runtime
             .as_ref()
             .map(|runtime| runtime.smoothed.current())
+    }
+
+    pub fn modal_field(&self) -> Option<&ModalField> {
+        self.runtime.as_ref().map(|runtime| &runtime.modal)
     }
 }
 
@@ -80,6 +86,7 @@ struct CymaRuntime {
     file: MidiState,
     target: HarmonicState,
     smoothed: SmoothedHarmonicState,
+    modal: ModalField,
     dirty: bool,
 }
 
@@ -193,6 +200,7 @@ mod tests {
         let harmonic = state.harmonic_state().unwrap();
         assert_eq!(harmonic.chord.to_string(), "C");
         assert_eq!(harmonic.active_note_count, 1);
+        assert_eq!(state.modal_field().unwrap().component_count(), 1);
     }
 
     #[test]

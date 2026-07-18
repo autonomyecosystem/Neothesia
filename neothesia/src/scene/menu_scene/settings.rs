@@ -155,7 +155,7 @@ impl super::MenuScene {
                         let enabled = ctx.cyma_enabled();
                         if nuon::settings_row_toggler()
                             .title("Enable Cyma")
-                            .subtitle("Analyze active MIDI notes")
+                            .subtitle("Analyze and visualize active MIDI notes")
                             .value(enabled)
                             .build(ui, rows)
                         {
@@ -174,6 +174,13 @@ impl super::MenuScene {
                             nuon::settings_row()
                                 .title("Detected Chord")
                                 .subtitle(chord)
+                                .build(ui, rows);
+
+                            spacer(ui);
+
+                            nuon::settings_row()
+                                .title("2D Modal Field")
+                                .subtitle(ctx.cyma_renderer_status())
                                 .build(ui, rows);
 
                             spacer(ui);

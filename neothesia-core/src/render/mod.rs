@@ -1,4 +1,5 @@
 mod background_animation;
+mod cyma;
 mod glow;
 mod guidelines;
 mod image;
@@ -9,6 +10,7 @@ mod text;
 mod waterfall;
 
 pub use background_animation::BgPipeline;
+pub use cyma::CymaRenderer;
 pub use glow::GlowRenderer;
 pub use guidelines::GuidelineRenderer;
 pub use image::{Image, ImageIdentifier, ImageRenderer};

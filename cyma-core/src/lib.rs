@@ -7,6 +7,7 @@ mod color;
 mod config;
 mod harmony;
 mod midi;
+mod modal;
 mod pitch;
 
 pub use chord::{Chord, ChordQuality, deduce_chord_name, recognize_midi_notes};
@@ -16,7 +17,5 @@ pub use config::{
 };
 pub use harmony::{HarmonicState, SmoothedHarmonicState, smoothing_alpha};
 pub use midi::{MidiEvent, MidiInputError, MidiState};
+pub use modal::{MAX_MODAL_COMPONENTS, ModalComponent, ModalField};
 pub use pitch::{PITCH_CLASS_COUNT, PitchClass};
-
-/// Upper bound for the modal components produced by the first Cyma version.
-pub const MAX_MODAL_COMPONENTS: usize = 12;

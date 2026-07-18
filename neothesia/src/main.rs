@@ -212,6 +212,8 @@ impl Neothesia {
         {
             let bg_color = self.context.config.background_color();
             let bg_color = wgpu_jumpstart::Color::from(bg_color).into_linear_wgpu_color();
+            let cyma_enabled = self.context.cyma_enabled();
+            let cyma_renderer = &self.context.cyma_renderer;
             let rpass = self
                 .context
                 .gpu
@@ -236,6 +238,9 @@ impl Neothesia {
 
             let mut rpass = wgpu_jumpstart::RenderPass::new(rpass, frame.texture.size());
 
+            if cyma_enabled {
+                cyma_renderer.render(&mut rpass);
+            }
             self.game_scene.render(&mut rpass);
         }
 

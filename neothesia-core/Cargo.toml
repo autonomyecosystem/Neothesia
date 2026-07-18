@@ -17,6 +17,7 @@ wgpu-jumpstart.workspace = true
 piano-layout.workspace = true
 midi-file.workspace = true
 profiling.workspace = true
+pollster.workspace = true
 euclid.workspace = true
 dpi.workspace = true
 
