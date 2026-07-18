@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "cyma-core",
   "piano-layout",
   "wgpu-jumpstart",
   "ffmpeg-encoder",
@@ -20,6 +21,7 @@ resolver = "2"
 edition = "2024"
 
 [workspace.dependencies]
+cyma-core = { path = "./cyma-core" }
 wgpu-jumpstart = { path = "./wgpu-jumpstart" }
 neothesia-core = { path = "./neothesia-core" }
 neothesia-image = { path = "./neothesia-image" }

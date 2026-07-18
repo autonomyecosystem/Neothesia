@@ -2,11 +2,12 @@ use std::path::PathBuf;
 
 mod model;
 
+pub use cyma_core::CymaConfig;
 pub use model::ColorSchemaV1;
 use model::{
-    AppearanceConfig, AppearanceConfigV1, DevicesConfig, DevicesConfigV1, History, HistoryV1,
-    LayoutConfig, LayoutConfigV1, Model, PlaybackConfig, PlaybackConfigV1, SynthConfig,
-    SynthConfigV1, WaterfallConfig, WaterfallConfigV1,
+    AppearanceConfig, AppearanceConfigV1, CymaConfig as CymaConfigModel, DevicesConfig,
+    DevicesConfigV1, History, HistoryV1, LayoutConfig, LayoutConfigV1, Model, PlaybackConfig,
+    PlaybackConfigV1, SynthConfig, SynthConfigV1, WaterfallConfig, WaterfallConfigV1,
 };
 
 fn ron_options() -> ron::Options {
@@ -44,6 +45,7 @@ impl Model {
             synth,
             keyboard_layout,
             appearance,
+            cyma,
         } = config;
 
         Self {
@@ -54,6 +56,7 @@ impl Model {
             keyboard_layout: LayoutConfig::V1(keyboard_layout),
             devices: DevicesConfig::V1(devices),
             appearance: AppearanceConfig::V1(appearance),
+            cyma: CymaConfigModel::V1(cyma),
         }
     }
 
@@ -80,6 +83,9 @@ impl Model {
             keyboard_layout: match self.keyboard_layout {
                 LayoutConfig::V1(v) => v,
             },
+            cyma: match self.cyma {
+                CymaConfigModel::V1(v) => v,
+            },
         }
     }
 }
@@ -93,6 +99,7 @@ pub struct Config {
     synth: SynthConfigV1,
     history: HistoryV1,
     keyboard_layout: LayoutConfigV1,
+    cyma: CymaConfig,
 }
 
 impl Default for Config {
@@ -120,6 +127,14 @@ impl Config {
 
     pub fn set_separate_channels(&mut self, separate_channels: bool) {
         self.devices.separate_channels = separate_channels;
+    }
+
+    pub fn cyma(&self) -> &CymaConfig {
+        &self.cyma
+    }
+
+    pub fn set_cyma_enabled(&mut self, enabled: bool) {
+        self.cyma.enabled = enabled;
     }
 
     pub fn separate_channels(&self) -> bool {
@@ -255,5 +270,29 @@ impl Config {
             std::fs::create_dir_all(path.parent().unwrap()).ok();
             std::fs::write(path, s).ok();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_cyma_section_uses_disabled_default() {
+        let model: Model = ron_options().from_str("()").unwrap();
+        assert!(!model.build().cyma().enabled);
+    }
+
+    #[test]
+    fn cyma_configuration_round_trips_in_persistent_model() {
+        let mut config = Model::default().build();
+        config.set_cyma_enabled(true);
+
+        let encoded = ron_options()
+            .to_string(&Model::from_config(config))
+            .unwrap();
+        let decoded: Model = ron_options().from_str(&encoded).unwrap();
+
+        assert!(decoded.build().cyma().enabled);
     }
 }

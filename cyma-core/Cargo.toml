@@ -1,0 +1,10 @@
+[package]
+name = "cyma-core"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+
+[dev-dependencies]
+ron.workspace = true

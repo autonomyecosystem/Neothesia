@@ -704,6 +704,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
+name = "cyma-core"
+version = "0.1.0"
+dependencies = [
+ "ron",
+ "serde",
+]
+
+[[package]]
 name = "dasp_sample"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1647,6 +1655,7 @@ dependencies = [
  "bytes",
  "cosmic-text",
  "cpal",
+ "cyma-core",
  "embed-resource",
  "env_logger",
  "fluidlite",
@@ -1706,6 +1715,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "bytes",
+ "cyma-core",
  "dpi",
  "euclid",
  "glyphon",

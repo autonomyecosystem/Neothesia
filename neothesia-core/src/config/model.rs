@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use cyma_core::CymaConfig as CymaConfigV1;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Default)]
@@ -19,6 +20,19 @@ pub struct Model {
     pub devices: DevicesConfig,
     #[serde(default)]
     pub appearance: AppearanceConfig,
+    #[serde(default)]
+    pub cyma: CymaConfig,
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum CymaConfig {
+    V1(CymaConfigV1),
+}
+
+impl Default for CymaConfig {
+    fn default() -> Self {
+        Self::V1(CymaConfigV1::default())
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
