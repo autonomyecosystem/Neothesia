@@ -3,7 +3,7 @@
 ## Stato e vincoli verificati
 
 - Upstream: `PolyMeilex/Neothesia`, branch di base `master`, commit `bb3be49`, licenza GPL-3.0.
-- Branch di lavoro: `feature/neothesia-cyma-phase-3`.
+- Branch di lavoro: `feature/neothesia-cyma-phase-4`.
 - Target operativo della sessione: Windows x86_64 GNU; il core resta privo di dipendenze specifiche di piattaforma.
 - Il workspace è definito in `Cargo.toml`; l'app usa `neothesia/Cargo.toml` e il rendering/config condivisi sono in `neothesia-core/Cargo.toml`.
 - Flusso MIDI reale: `neothesia/src/input_manager/mod.rs` normalizza Note On con velocity zero, invia `NeothesiaEvent::MidiInput` a `neothesia/src/main.rs`, che inoltra l'evento alla `Scene` attiva definita in `neothesia/src/scene/mod.rs`.
@@ -32,8 +32,14 @@
    - Implementare pipeline, uniform allineati e shader nativo in `neothesia-core/src/render/cyma/{mod.rs,shader.wgsl}`, riutilizzando `wgpu_jumpstart::{Shape,Uniform}`.
    - Possedere il renderer lazy in `neothesia/src/context.rs`, aggiornandolo solo quando Cyma è attivo e rendendone visibile lo stato nel pannello `neothesia/src/scene/menu_scene/settings.rs`.
    - Registrare il draw del campo in `neothesia/src/main.rs` prima della scena attiva, così resta uno sfondo 2D e non richiede modifiche al trait `Scene`.
-4. **Geometria 3D, particelle e prestazioni - non iniziata**
+4. **Geometria 3D, particelle e prestazioni - completata il 18 luglio 2026**
    - Aggiungere solo dopo la validazione del renderer 2D; includere preset di qualità, resize, misure CPU/GPU e degradazione controllata.
+   - Estendere `cyma-core/src/config.rs` con modalità 2D/3D, qualità Low/Medium/High e particelle opzionali, mantenendo 2D/Medium/particelle disattivate come default retrocompatibile.
+   - Aggiungere campionamento e gradiente nodale puri in `cyma-core/src/modal.rs`, riutilizzati dalla simulazione particellare senza dipendenze GPU.
+   - Suddividere il renderer in `neothesia-core/src/render/cyma/{mod,target,surface,particles,gpu_timer}.rs` con shader WGSL dedicati nella stessa directory.
+   - Renderizzare Cyma su target off-screen scalati per preset, quindi comporre sulla surface; Low/Medium/High ridurranno risoluzione, modi massimi, densità mesh e particelle.
+   - Richiedere `TIMESTAMP_QUERY` in `wgpu-jumpstart/src/gpu.rs` solo quando supportato dall'adapter; mostrare GPU `N/A` senza interrompere il renderer quando non disponibile.
+   - Integrare opzioni e metriche in `neothesia/src/{context,main}.rs` e `neothesia/src/scene/menu_scene/settings.rs`, preservando il trait `Scene`.
 
 ## Fondamento fisico e trasformazioni artistiche
 
@@ -44,16 +50,39 @@
 
 - `cargo fmt --all -- --check`: superato.
 - `cargo check -p cyma-core -p neothesia-core -p neothesia --offline`: superato su Windows GNU.
-- `cargo test -p cyma-core -p neothesia-core -p neothesia --offline`: superato, 39 test totali (26 `cyma-core`, 8 `neothesia`, 5 `neothesia-core`).
-- I test renderer verificano parsing e validazione Naga del WGSL, dimensione/allineamento/padding dell'uniform e un draw off-screen 64×64 con readback GPU non nero per C-E-G; il test GPU è superato su Intel Iris Xe/Vulkan.
+- Test mirati superati: 47 test totali, eseguiti come 29 test `cyma-core`, 10 test `neothesia-core --lib` e 8 test `neothesia --bin neothesia`.
+- I test renderer verificano parsing e validazione Naga dei quattro shader WGSL, dimensione/allineamento/padding dell'uniform, preset di qualità, mesh, particelle e timer; il draw off-screen 64×64 con compositing e readback GPU non nero per C-E-G è superato su Intel Iris Xe/Vulkan.
 - `cargo clippy -p cyma-core --all-targets -- -D warnings`: superato senza warning.
+- `cargo clippy -p wgpu-jumpstart --all-targets -- -D warnings`: superato senza warning.
 - Il Clippy mirato su `neothesia-core` e `neothesia`, ripetuto consentendo esclusivamente `dead_code` e `unused_mut` già presenti upstream, è superato senza nuovi warning Cyma.
-- `cargo run -p neothesia`: avvio riuscito, GPU Intel Iris Xe inizializzata tramite Vulkan, processo responsivo e chiusura standard riuscita con exit code 0.
-- `cargo check --workspace` e `cargo test --workspace`: non completabili per `ffmpeg-sys-next`, che richiede `pkg-config` e `libavutil` non installati. Il blocco riguarda `ffmpeg-encoder`/CLI e non i crate modificati.
+- `cargo run -p neothesia` con configurazione temporanea isolata 3D/Medium/particelle e `test.mid`: avvio riuscito, Intel Iris Xe inizializzata tramite Vulkan con timestamp query, processo responsivo, resize 900×650 riuscito e chiusura pulita. Anche l'avvio normale senza file è responsivo e si chiude pulitamente. Configurazione e log temporanei sono stati rimossi.
+- `cargo check --workspace` e `cargo test --workspace`: non completabili per `ffmpeg-sys-next`; il build script non trova il comando `pkg-config` necessario per `libavutil`. Il blocco riguarda `ffmpeg-encoder`/CLI e non i crate modificati.
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`: non completabile perché `fluidlite-sys` non trova `gcc.exe` e l'header C `string.h`. Resta inoltre il warning upstream già verificato in `midi-file/examples/play.rs` (`useless_borrows_in_formatting` per `&out_ports[0]`) quando la build riesce a raggiungere quell'esempio.
 - Clippy e build sui crate applicativi riportano inoltre warning upstream preesistenti: `home` e `xdg_config` inutilizzate su Windows in `neothesia-core/src/utils/resources.rs`, e `mut` non necessario per `attributes` in `neothesia/src/main.rs`. Non sono stati corretti perché estranei alla fase.
-- Verifiche manuali riuscite: avvio normale, caricamento da riga di comando di un MIDI temporaneo, ingresso in Free Play, inizializzazione con configurazione Cyma temporanea attiva, responsività e chiusura pulita. L'automazione Windows non ha mantenuto note attive né avviato la Playing Scene in modo abbastanza affidabile per una validazione visiva completa; il draw reale è stato quindi verificato con il test GPU off-screen.
-- Verifiche manuali non eseguibili: tastiera MIDI hardware, click sul toggle Cyma, resize durante un campo attivo, ritorno al menu dalla Playing Scene e misura visiva dei 60 FPS.
+- Verifiche non eseguibili in modo affidabile in questa sessione: tastiera MIDI hardware, navigazione manuale in Free Play, click sui controlli Cyma, ritorno al menu dalla Playing Scene e misura visiva dei 60 FPS. Le metriche CPU/GPU sono esposte nella UI, ma i target `<1 ms` e 60 FPS non sono stati certificati con un benchmark dedicato.
+
+## Esito fase 4
+
+- `CymaConfig` espone modalità `Field2d`/`Surface3d`, qualità `Low`/`Medium`/`High` e particelle opzionali. I default restano 2D, Medium e particelle disattivate; la deserializzazione di configurazioni precedenti usa questi valori senza modificare il comportamento standard.
+- I preset sono deterministici: Low usa scala 40%, massimo 4 modi, mesh 32×24 e 128 particelle; Medium usa scala 65%, massimo 8 modi, mesh 64×40 e 384 particelle; High usa scala 100%, massimo 12 modi, mesh 96×64 e 768 particelle.
+- `ModalField::sample` e `ModalField::node_gradient` restano logica pura in `cyma-core`. Il guadagno di fase è precomputato una volta per componente, evitando `sqrt` e `cos` nei percorsi shader e di campionamento ripetuto.
+- Cyma renderizza prima su un target off-screen scalato. La modalità 2D usa un full-screen pass con blend `REPLACE`; la modalità 3D deforma una mesh nel vertex shader e usa `Depth24Plus`. Un secondo pass compone la texture sulla surface, dopo di che la scena upstream usa `Load` senza modificare il trait `Scene`.
+- Le particelle usano 768 stati e istanze allocati una sola volta. La simulazione CPU è deterministica, non usa casualità globale né lock e scrive soltanto la slice attiva nel buffer GPU; l'attrazione verso il gradiente di `abs(campo modale)` è una trasformazione artistica, non un modello quantitativo di granelli su una piastra reale.
+- Il timer GPU usa quattro timestamp per i pass off-screen/composite, un resolve buffer e due readback buffer. Le callback comunicano tramite `Arc<AtomicU8>` e `Device::poll(Poll)` non bloccante; se `TIMESTAMP_QUERY` manca o il readback fallisce, la UI mostra `N/A` e il rendering continua.
+- Superficie 3D, particelle e timer sono capacità opzionali create in error scope separati. Se depth/pipeline 3D non sono disponibili si usa il campo 2D; se le particelle falliscono il campo continua senza particelle; un errore del renderer base mantiene disponibile l'analisi musicale e disattiva soltanto il draw.
+- `Context` misura il costo CPU Cyma totale di update e registrazione dei pass con una media mobile esponenziale. La UI mostra stato/fallback, modalità, qualità, particelle, tempo CPU e tempo GPU.
+- Non vengono creati `Vec` o lock nel percorso per frame. Le uniche riallocazioni esplicite del renderer avvengono al primo campo attivo o quando cambiano dimensione, qualità o necessità del depth target.
+- Compromesso prestazionale: le particelle sono simulate sulla CPU e ogni particella campiona più volte il campo per il gradiente; il limite di 768 e i preset inferiori contengono il costo. Il timer GPU introduce un mapping asincrono opzionale per frame, senza attese bloccanti nel render loop.
+
+## File modificati nella fase 4
+
+- Configurazione e campo puro: `cyma-core/src/{config,lib,modal}.rs`.
+- Configurazione persistente: `neothesia-core/src/config/mod.rs`.
+- Renderer e shader: `neothesia-core/src/render/mod.rs` e `neothesia-core/src/render/cyma/{mod,target,surface,particles,gpu_timer}.rs`, più `shader.wgsl`, `composite.wgsl`, `surface.wgsl` e `particles.wgsl`.
+- Feature GPU opzionale: `wgpu-jumpstart/src/gpu.rs`.
+- Integrazione applicativa e metriche: `neothesia/src/{context,main}.rs`.
+- Impostazioni e stato renderer: `neothesia/src/scene/menu_scene/settings.rs`.
+- Documentazione: `docs/CYMA_IMPLEMENTATION_PLAN.md`.
 
 ## Esito fase 3
 

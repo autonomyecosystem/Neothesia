@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 mod model;
 
-pub use cyma_core::CymaConfig;
+pub use cyma_core::{CymaConfig, CymaQuality, CymaVisualization};
 pub use model::ColorSchemaV1;
 use model::{
     AppearanceConfig, AppearanceConfigV1, CymaConfig as CymaConfigModel, DevicesConfig,
@@ -139,6 +139,18 @@ impl Config {
 
     pub fn set_cyma_response_time_ms(&mut self, response_time_ms: u16) {
         self.cyma.set_response_time_ms(response_time_ms);
+    }
+
+    pub fn set_cyma_visualization(&mut self, visualization: CymaVisualization) {
+        self.cyma.visualization = visualization;
+    }
+
+    pub fn set_cyma_quality(&mut self, quality: CymaQuality) {
+        self.cyma.quality = quality;
+    }
+
+    pub fn set_cyma_particles_enabled(&mut self, enabled: bool) {
+        self.cyma.particles_enabled = enabled;
     }
 
     pub fn separate_channels(&self) -> bool {
@@ -291,12 +303,19 @@ mod tests {
     fn cyma_configuration_round_trips_in_persistent_model() {
         let mut config = Model::default().build();
         config.set_cyma_enabled(true);
+        config.set_cyma_visualization(CymaVisualization::Surface3d);
+        config.set_cyma_quality(CymaQuality::High);
+        config.set_cyma_particles_enabled(true);
 
         let encoded = ron_options()
             .to_string(&Model::from_config(config))
             .unwrap();
         let decoded: Model = ron_options().from_str(&encoded).unwrap();
 
-        assert!(decoded.build().cyma().enabled);
+        let decoded = decoded.build();
+        assert!(decoded.cyma().enabled);
+        assert_eq!(decoded.cyma().visualization, CymaVisualization::Surface3d);
+        assert_eq!(decoded.cyma().quality, CymaQuality::High);
+        assert!(decoded.cyma().particles_enabled);
     }
 }

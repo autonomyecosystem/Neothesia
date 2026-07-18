@@ -179,9 +179,43 @@ impl super::MenuScene {
                             spacer(ui);
 
                             nuon::settings_row()
-                                .title("2D Modal Field")
+                                .title("Renderer")
                                 .subtitle(ctx.cyma_renderer_status())
                                 .build(ui, rows);
+
+                            spacer(ui);
+
+                            self::update_cyma_visualization(
+                                ctx,
+                                nuon::settings_row_spin()
+                                    .title("Visualization")
+                                    .subtitle(ctx.config.cyma().visualization.label())
+                                    .id("cyma-visualization")
+                                    .build(ui, rows),
+                            );
+
+                            spacer(ui);
+
+                            self::update_cyma_quality(
+                                ctx,
+                                nuon::settings_row_spin()
+                                    .title("Quality")
+                                    .subtitle(ctx.config.cyma().quality.label())
+                                    .id("cyma-quality")
+                                    .build(ui, rows),
+                            );
+
+                            spacer(ui);
+
+                            let particles_enabled = ctx.config.cyma().particles_enabled;
+                            if nuon::settings_row_toggler()
+                                .title("Nodal Particles")
+                                .subtitle("Attract particles toward modal nodes")
+                                .value(particles_enabled)
+                                .build(ui, rows)
+                            {
+                                ctx.config.set_cyma_particles_enabled(!particles_enabled);
+                            }
 
                             spacer(ui);
 
@@ -193,6 +227,25 @@ impl super::MenuScene {
                                     .id("cyma-response-time")
                                     .build(ui, rows),
                             );
+
+                            spacer(ui);
+
+                            nuon::settings_row()
+                                .title("Cyma CPU")
+                                .subtitle(format_cyma_metric(ctx.cyma_cpu_ms()))
+                                .build(ui, rows);
+
+                            spacer(ui);
+
+                            let gpu_metric = if ctx.cyma_gpu_timing_supported() {
+                                format_cyma_metric(ctx.cyma_gpu_ms())
+                            } else {
+                                "N/A".to_string()
+                            };
+                            nuon::settings_row()
+                                .title("Cyma GPU")
+                                .subtitle(gpu_metric)
+                                .build(ui, rows);
                         }
                     });
             });
@@ -478,6 +531,33 @@ pub fn update_cyma_response_time(ctx: &mut Context, kind: nuon::SettingsRowSpinR
     };
 
     ctx.config.set_cyma_response_time_ms(response_time_ms);
+}
+
+pub fn update_cyma_visualization(ctx: &mut Context, kind: nuon::SettingsRowSpinResult) {
+    let current = ctx.config.cyma().visualization;
+    let visualization = match kind {
+        nuon::SettingsRowSpinResult::Plus => current.next(),
+        nuon::SettingsRowSpinResult::Minus => current.previous(),
+        nuon::SettingsRowSpinResult::Idle => current,
+    };
+    ctx.config.set_cyma_visualization(visualization);
+}
+
+pub fn update_cyma_quality(ctx: &mut Context, kind: nuon::SettingsRowSpinResult) {
+    let current = ctx.config.cyma().quality;
+    let quality = match kind {
+        nuon::SettingsRowSpinResult::Plus => current.next(),
+        nuon::SettingsRowSpinResult::Minus => current.previous(),
+        nuon::SettingsRowSpinResult::Idle => current,
+    };
+    ctx.config.set_cyma_quality(quality);
+}
+
+fn format_cyma_metric(metric_ms: Option<f32>) -> String {
+    metric_ms
+        .filter(|value| value.is_finite())
+        .map(|value| format!("{value:.2} ms"))
+        .unwrap_or_else(|| "N/A".to_string())
 }
 
 pub fn update_range_start(ctx: &mut Context, kind: nuon::SettingsRowSpinResult) {

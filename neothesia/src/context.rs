@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use crate::{
     NeothesiaEvent, TransformUniform,
@@ -8,10 +11,12 @@ use crate::{
     output_manager::OutputManager,
     utils::window::WindowState,
 };
-use cyma_core::HarmonicState;
+use cyma_core::{CymaVisualization, HarmonicState};
 use midi_file::midly::MidiMessage;
-use neothesia_core::render::{CymaRenderer, QuadRendererFactory, TextRendererFactory};
-use wgpu_jumpstart::{Gpu, Uniform};
+use neothesia_core::render::{
+    CymaRenderOptions, CymaRenderer, QuadRendererFactory, TextRendererFactory,
+};
+use wgpu_jumpstart::{Gpu, Uniform, wgpu};
 use winit::event_loop::EventLoopProxy;
 
 use winit::window::Window;
@@ -31,6 +36,7 @@ pub struct Context {
     pub config: Config,
     cyma: CymaState,
     pub(crate) cyma_renderer: CymaRendererState,
+    cyma_cpu_metrics: CymaCpuMetrics,
 
     pub proxy: EventLoopProxy<NeothesiaEvent>,
 
@@ -86,6 +92,7 @@ impl Context {
             config,
             cyma,
             cyma_renderer,
+            cyma_cpu_metrics: CymaCpuMetrics::default(),
             proxy,
             frame_timestamp: std::time::Instant::now(),
 
@@ -114,6 +121,9 @@ impl Context {
         if enabled && matches!(&self.cyma_renderer, CymaRendererState::Uninitialized) {
             self.cyma_renderer = CymaRendererState::initialize(&self.gpu);
         }
+        if !enabled {
+            self.cyma_cpu_metrics = CymaCpuMetrics::default();
+        }
     }
 
     pub fn observe_cyma_midi_event(
@@ -133,22 +143,62 @@ impl Context {
         }
     }
 
-    pub fn update_cyma(&mut self, delta: std::time::Duration) {
+    pub fn update_cyma(&mut self, delta: Duration) {
+        if !self.cyma.is_enabled() {
+            self.cyma_cpu_metrics.update_ms = 0.0;
+            return;
+        }
+
+        let started = Instant::now();
         let response_seconds = self.config.cyma().response_time_seconds();
         self.cyma.update(delta, response_seconds);
 
-        let Some(field) = self.cyma.modal_field().copied() else {
-            return;
-        };
-        let CymaRendererState::Ready(renderer) = &mut self.cyma_renderer else {
-            return;
-        };
+        let config = *self.config.cyma();
+        if let (Some(field), CymaRendererState::Ready(renderer)) =
+            (self.cyma.modal_field().copied(), &mut self.cyma_renderer)
+        {
+            renderer.update(
+                &field,
+                CymaRenderOptions {
+                    visualization: config.visualization,
+                    quality: config.quality,
+                    particles_enabled: config.particles_enabled,
+                },
+                delta,
+                self.window_state.physical_size.width,
+                self.window_state.physical_size.height,
+            );
+        }
 
-        renderer.update(
-            &field,
-            self.window_state.physical_size.width,
-            self.window_state.physical_size.height,
-        );
+        self.cyma_cpu_metrics.update_ms = elapsed_ms(started);
+    }
+
+    pub fn render_cyma(
+        &mut self,
+        surface_view: &wgpu::TextureView,
+        clear_color: wgpu::Color,
+        extent: wgpu::Extent3d,
+    ) -> bool {
+        if !self.cyma.is_enabled() {
+            return false;
+        }
+
+        let started = Instant::now();
+        let rendered = match &mut self.cyma_renderer {
+            CymaRendererState::Ready(renderer) => {
+                renderer.render(&mut self.gpu.encoder, surface_view, clear_color, extent)
+            }
+            CymaRendererState::Uninitialized | CymaRendererState::Unavailable => false,
+        };
+        let total_ms = self.cyma_cpu_metrics.update_ms + elapsed_ms(started);
+        self.cyma_cpu_metrics.record(total_ms);
+        rendered
+    }
+
+    pub fn after_gpu_submit(&mut self) {
+        if let CymaRendererState::Ready(renderer) = &mut self.cyma_renderer {
+            renderer.after_submit(&self.gpu.device);
+        }
     }
 
     pub fn cyma_harmonic_state(&self) -> Option<&HarmonicState> {
@@ -160,12 +210,69 @@ impl Context {
             return "Disabled";
         }
 
-        match self.cyma_renderer {
+        match &self.cyma_renderer {
             CymaRendererState::Uninitialized => "Not initialized",
-            CymaRendererState::Ready(_) => "Active",
+            CymaRendererState::Ready(renderer) => {
+                let capabilities = renderer.capabilities();
+                if self.config.cyma().visualization == CymaVisualization::Surface3d
+                    && !capabilities.surface_3d
+                {
+                    "2D fallback (3D unavailable)"
+                } else if self.config.cyma().particles_enabled && !capabilities.particles {
+                    "Active (particles unavailable)"
+                } else {
+                    "Active"
+                }
+            }
             CymaRendererState::Unavailable => "GPU unavailable",
         }
     }
+
+    pub fn cyma_cpu_ms(&self) -> Option<f32> {
+        self.cyma.is_enabled().then_some(())?;
+        self.cyma_cpu_metrics.ema_ms
+    }
+
+    pub fn cyma_gpu_ms(&self) -> Option<f32> {
+        if !self.cyma.is_enabled() {
+            return None;
+        }
+        let CymaRendererState::Ready(renderer) = &self.cyma_renderer else {
+            return None;
+        };
+        renderer.last_gpu_ms()
+    }
+
+    pub fn cyma_gpu_timing_supported(&self) -> bool {
+        let CymaRendererState::Ready(renderer) = &self.cyma_renderer else {
+            return false;
+        };
+        renderer.capabilities().gpu_timing
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct CymaCpuMetrics {
+    update_ms: f32,
+    ema_ms: Option<f32>,
+}
+
+impl CymaCpuMetrics {
+    fn record(&mut self, frame_ms: f32) {
+        if !frame_ms.is_finite() || frame_ms < 0.0 {
+            return;
+        }
+
+        const EMA_ALPHA: f32 = 0.12;
+        self.ema_ms = Some(match self.ema_ms {
+            Some(previous) => previous + (frame_ms - previous) * EMA_ALPHA,
+            None => frame_ms,
+        });
+    }
+}
+
+fn elapsed_ms(started: Instant) -> f32 {
+    started.elapsed().as_secs_f32() * 1_000.0
 }
 
 pub(crate) enum CymaRendererState {
@@ -179,15 +286,9 @@ impl CymaRendererState {
         match CymaRenderer::new(gpu) {
             Ok(renderer) => Self::Ready(Box::new(renderer)),
             Err(err) => {
-                log::error!("Cyma 2D renderer is unavailable: {err}");
+                log::error!("Cyma renderer is unavailable: {err}");
                 Self::Unavailable
             }
-        }
-    }
-
-    pub(crate) fn render<'pass>(&'pass self, render_pass: &mut wgpu_jumpstart::RenderPass<'pass>) {
-        if let Self::Ready(renderer) = self {
-            renderer.render(render_pass);
         }
     }
 }

@@ -123,9 +123,11 @@ impl Gpu {
             })
             .await?;
 
+        let optional_features = adapter.features() & wgpu::Features::TIMESTAMP_QUERY;
+
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty(),
+                required_features: optional_features,
                 required_limits: wgpu::Limits {
                     max_compute_workgroup_storage_size: 0,
                     max_compute_invocations_per_workgroup: 0,
@@ -148,10 +150,11 @@ impl Gpu {
         let texture_format = compatible_surface.map(|s| s.get_capabilities(&adapter).formats[0]);
 
         log::info!(
-            "Using {} ({:?}, Preferred Format: {:?})",
+            "Using {} ({:?}, Preferred Format: {:?}, Timestamp Queries: {})",
             adapter_info.name,
             adapter_info.backend,
             texture_format,
+            device.features().contains(wgpu::Features::TIMESTAMP_QUERY),
         );
 
         Ok(Self {

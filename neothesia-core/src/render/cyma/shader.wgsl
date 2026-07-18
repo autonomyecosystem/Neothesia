@@ -42,11 +42,9 @@ fn modal_field(uv: vec2<f32>, component_count: u32) -> f32 {
         let mode_x = mode.x;
         let mode_y = mode.y;
         let amplitude = mode.z;
-        let phase = mode.w;
+        let phase_gain = mode.w;
         let spatial = sin(PI * mode_x * uv.x) * sin(PI * mode_y * uv.y);
-        let modal_frequency = sqrt(mode_x * mode_x + mode_y * mode_y);
-        let deterministic_phase_gain = 0.75 + 0.25 * cos(modal_frequency * 0.25 + phase);
-        value += amplitude * spatial * deterministic_phase_gain;
+        value += amplitude * spatial * phase_gain;
     }
 
     return value;
