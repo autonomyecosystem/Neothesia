@@ -1,9 +1,15 @@
 use std::sync::Arc;
 
 use crate::{
-    NeothesiaEvent, TransformUniform, config::Config, input_manager::InputManager,
-    output_manager::OutputManager, utils::window::WindowState,
+    NeothesiaEvent, TransformUniform,
+    config::Config,
+    cyma::{CymaMidiSource, CymaState},
+    input_manager::InputManager,
+    output_manager::OutputManager,
+    utils::window::WindowState,
 };
+use cyma_core::HarmonicState;
+use midi_file::midly::MidiMessage;
 use neothesia_core::render::{QuadRendererFactory, TextRendererFactory};
 use wgpu_jumpstart::{Gpu, Uniform};
 use winit::event_loop::EventLoopProxy;
@@ -23,6 +29,7 @@ pub struct Context {
     pub output_manager: OutputManager,
     pub input_manager: InputManager,
     pub config: Config,
+    cyma: CymaState,
 
     pub proxy: EventLoopProxy<NeothesiaEvent>,
 
@@ -53,6 +60,7 @@ impl Context {
         );
 
         let config = Config::new();
+        let cyma = CymaState::new(config.cyma().enabled);
 
         let text_renderer_factory = TextRendererFactory::new(&gpu);
         let quad_renderer_factory = QuadRendererFactory::new(&gpu, &transform_uniform);
@@ -69,6 +77,7 @@ impl Context {
             output_manager: Default::default(),
             input_manager: InputManager::new(proxy.clone()),
             config,
+            cyma,
             proxy,
             frame_timestamp: std::time::Instant::now(),
 
@@ -84,5 +93,40 @@ impl Context {
             self.window_state.scale_factor as f32,
         );
         self.transform.update(&self.gpu.queue);
+    }
+
+    pub fn cyma_enabled(&self) -> bool {
+        self.cyma.is_enabled()
+    }
+
+    pub fn set_cyma_enabled(&mut self, enabled: bool) {
+        self.config.set_cyma_enabled(enabled);
+        self.cyma.set_enabled(enabled);
+    }
+
+    pub fn observe_cyma_midi_event(
+        &mut self,
+        source: CymaMidiSource,
+        channel: u8,
+        message: &MidiMessage,
+    ) {
+        if let Err(err) = self.cyma.observe_midi_event(source, channel, message) {
+            log::error!("Cyma rejected a MIDI event: {err}");
+        }
+    }
+
+    pub fn reset_cyma_source(&mut self, source: CymaMidiSource) {
+        if let Err(err) = self.cyma.reset_source(source) {
+            log::error!("Cyma failed to reset MIDI state: {err}");
+        }
+    }
+
+    pub fn update_cyma(&mut self, delta: std::time::Duration) {
+        let response_seconds = self.config.cyma().response_time_seconds();
+        self.cyma.update(delta, response_seconds);
+    }
+
+    pub fn cyma_harmonic_state(&self) -> Option<&HarmonicState> {
+        self.cyma.harmonic_state()
     }
 }

@@ -1,6 +1,7 @@
 #![allow(clippy::collapsible_match, clippy::single_match)]
 
 mod context;
+mod cyma;
 mod icons;
 mod input_manager;
 mod output_manager;
@@ -11,6 +12,7 @@ mod utils;
 use std::{sync::Arc, time::Duration};
 
 use context::Context;
+use cyma::CymaMidiSource;
 use scene::{Scene, menu_scene, playing_scene};
 use song::Song;
 use utils::window::WindowState;
@@ -136,18 +138,23 @@ impl Neothesia {
     ) {
         match event {
             NeothesiaEvent::Play(song) => {
+                self.context.reset_cyma_source(CymaMidiSource::File);
                 let to = playing_scene::PlayingScene::new(&mut self.context, song);
                 self.game_scene = Box::new(to);
             }
             NeothesiaEvent::FreePlay(song) => {
+                self.context.reset_cyma_source(CymaMidiSource::File);
                 let to = scene::freeplay::FreeplayScene::new(&mut self.context, song);
                 self.game_scene = Box::new(to);
             }
             NeothesiaEvent::MainMenu(song) => {
+                self.context.reset_cyma_source(CymaMidiSource::File);
                 let to = menu_scene::MenuScene::new(&mut self.context, song);
                 self.game_scene = Box::new(to);
             }
             NeothesiaEvent::MidiInput { channel, message } => {
+                self.context
+                    .observe_cyma_midi_event(CymaMidiSource::User, channel, &message);
                 self.game_scene
                     .midi_event(&mut self.context, channel, &message);
             }
@@ -166,6 +173,7 @@ impl Neothesia {
         #[cfg(debug_assertions)]
         self.context.fps_ticker.tick();
 
+        self.context.update_cyma(delta);
         self.game_scene.update(&mut self.context, delta);
     }
 

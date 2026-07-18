@@ -13,6 +13,7 @@ use neothesia_core::render::{NoteLabels, WaterfallRenderer};
 use crate::{
     NeothesiaEvent,
     context::Context,
+    cyma::CymaMidiSource,
     icons,
     scene::{
         freeplay::{FreeplayScene, on_async},
@@ -172,11 +173,16 @@ impl Preview {
     }
 
     pub fn update(&mut self, keyboard: &mut Keyboard, ctx: &mut Context, delta: Duration) {
-        let midi_events = self.player.update(delta);
+        let midi_events = self.player.update_with_observer(delta, |channel, event| {
+            if event.channel != 9 {
+                ctx.observe_cyma_midi_event(CymaMidiSource::File, channel, &event.message);
+            }
+        });
         keyboard.file_midi_events(&ctx.config, &midi_events);
 
         if self.player.is_finished() && !self.player.is_paused() {
             self.player.pause();
+            ctx.reset_cyma_source(CymaMidiSource::File);
         }
 
         let time = self.player.time_without_lead_in() + ctx.config.animation_offset();
@@ -449,7 +455,7 @@ pub fn update_preview_ui(scene: &mut FreeplayScene, ctx: &mut Context) {
 
     match msg {
         Msg::TogglePlay => {
-            toggle_preview_playback(scene);
+            toggle_preview_playback(scene, ctx);
         }
         Msg::Seek => {
             seek_preview_to_cursor(scene, ctx);
@@ -469,7 +475,7 @@ pub fn update_preview_ui(scene: &mut FreeplayScene, ctx: &mut Context) {
     }
 }
 
-fn handle_record_click(scene: &mut FreeplayScene, ctx: &Context) {
+fn handle_record_click(scene: &mut FreeplayScene, ctx: &mut Context) {
     if scene.recorder.is_recording() {
         scene.recorder_status = match stop_recording(scene, ctx) {
             Ok(()) => RecorderStatus::RecordingFinished(scene.recorder.duration()),
@@ -480,6 +486,7 @@ fn handle_record_click(scene: &mut FreeplayScene, ctx: &Context) {
 
     scene.keyboard.set_song_config(Default::default());
     scene.keyboard.reset_notes();
+    ctx.reset_cyma_source(CymaMidiSource::File);
 
     scene.preview = None;
     scene.recorder_status = RecorderStatus::default();
@@ -522,7 +529,7 @@ fn handle_save_click(scene: &mut FreeplayScene, ctx: &Context) {
         }));
 }
 
-fn stop_recording(scene: &mut FreeplayScene, ctx: &Context) -> Result<(), RecorderError> {
+fn stop_recording(scene: &mut FreeplayScene, ctx: &mut Context) -> Result<(), RecorderError> {
     let smf = scene.recorder.stop()?;
 
     let midi = midi_file::MidiFile::from_smf("freeplay-recording.mid", smf)
@@ -531,13 +538,14 @@ fn stop_recording(scene: &mut FreeplayScene, ctx: &Context) -> Result<(), Record
 
     scene.keyboard.set_song_config(song.config.clone());
     scene.keyboard.reset_notes();
+    ctx.reset_cyma_source(CymaMidiSource::File);
 
     scene.preview = Some(Preview::new(&scene.keyboard, song, ctx));
 
     Ok(())
 }
 
-fn seek_preview_to_cursor(scene: &mut FreeplayScene, ctx: &Context) {
+fn seek_preview_to_cursor(scene: &mut FreeplayScene, ctx: &mut Context) {
     let Some(player) = scene.preview.as_mut().map(|state| &mut state.player) else {
         return;
     };
@@ -546,15 +554,17 @@ fn seek_preview_to_cursor(scene: &mut FreeplayScene, ctx: &Context) {
     let percentage = (ctx.window_state.cursor_logical_position.x / width).clamp(0.0, 1.0);
 
     player.set_percentage_time(percentage);
+    ctx.reset_cyma_source(CymaMidiSource::File);
     scene.keyboard.reset_notes();
 }
 
-pub fn toggle_preview_playback(scene: &mut FreeplayScene) {
+pub fn toggle_preview_playback(scene: &mut FreeplayScene, ctx: &mut Context) {
     let Some(preview) = scene.preview.as_mut() else {
         return;
     };
 
     preview.player.pause_resume();
+    ctx.reset_cyma_source(CymaMidiSource::File);
 }
 
 fn to_smf(events: &[RecordedMidiEvent]) -> Result<Smf<'static>, RecorderError> {

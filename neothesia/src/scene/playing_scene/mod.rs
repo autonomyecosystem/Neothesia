@@ -12,8 +12,8 @@ use self::top_bar::TopBar;
 
 use super::{NuonRenderer, Scene};
 use crate::{
-    NeothesiaEvent, context::Context, render::WaterfallRenderer, scene::MouseToMidiEventState,
-    song::Song, utils::window::WinitEvent,
+    NeothesiaEvent, context::Context, cyma::CymaMidiSource, render::WaterfallRenderer,
+    scene::MouseToMidiEventState, song::Song, utils::window::WinitEvent,
 };
 
 mod keyboard;
@@ -158,16 +158,21 @@ impl PlayingScene {
     }
 
     #[profiling::function]
-    fn update_midi_player(&mut self, ctx: &Context, delta: Duration) -> f32 {
+    fn update_midi_player(&mut self, ctx: &mut Context, delta: Duration) -> f32 {
         if self.top_bar.is_looper_active() && self.player.time() > self.top_bar.loop_end_timestamp()
         {
+            ctx.reset_cyma_source(CymaMidiSource::File);
             self.player.set_time(self.top_bar.loop_start_timestamp());
             self.keyboard.reset_notes();
         }
 
         if self.player.play_along().are_required_keys_pressed() {
             let delta = (delta / 10) * (ctx.config.speed_multiplier() * 10.0) as u32;
-            let midi_events = self.player.update(delta);
+            let midi_events = self.player.update_with_observer(delta, |channel, event| {
+                if event.channel != 9 {
+                    ctx.observe_cyma_midi_event(CymaMidiSource::File, channel, &event.message);
+                }
+            });
             self.keyboard.file_midi_events(&ctx.config, &midi_events);
         }
 
@@ -272,6 +277,7 @@ impl Scene for PlayingScene {
             .handle_window_event(ctx, event, &mut self.player);
 
         if self.rewind_controller.is_rewinding() {
+            ctx.reset_cyma_source(CymaMidiSource::File);
             self.keyboard.reset_notes();
         }
 
@@ -283,6 +289,7 @@ impl Scene for PlayingScene {
 
         if event.key_released(Key::Named(NamedKey::Space)) {
             self.player.pause_resume();
+            ctx.reset_cyma_source(CymaMidiSource::File);
         }
 
         handle_settings_input(ctx, &mut self.toast_manager, &mut self.waterfall, event);

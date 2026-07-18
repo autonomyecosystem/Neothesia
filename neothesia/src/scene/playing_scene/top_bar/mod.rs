@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use crate::{NeothesiaEvent, context::Context, icons};
+use crate::{NeothesiaEvent, context::Context, cyma::CymaMidiSource, icons};
 
 use super::{
     PlayingScene,
@@ -213,6 +213,7 @@ impl TopBar {
                     .build(ui)
                 {
                     this.player.pause_resume();
+                    ctx.reset_cyma_source(CymaMidiSource::File);
                 }
             });
     }
@@ -247,6 +248,7 @@ impl TopBar {
 
                     let p = x / w;
                     this.player.set_percentage_time(p);
+                    ctx.reset_cyma_source(CymaMidiSource::File);
                     this.keyboard.reset_notes();
                 }
             }

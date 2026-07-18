@@ -137,6 +137,10 @@ impl Config {
         self.cyma.enabled = enabled;
     }
 
+    pub fn set_cyma_response_time_ms(&mut self, response_time_ms: u16) {
+        self.cyma.set_response_time_ms(response_time_ms);
+    }
+
     pub fn separate_channels(&self) -> bool {
         self.devices.separate_channels
     }

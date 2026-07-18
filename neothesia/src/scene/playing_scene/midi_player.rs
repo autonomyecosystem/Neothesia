@@ -61,10 +61,20 @@ impl MidiPlayer {
         &self.song
     }
 
-    /// When playing: returns midi events
-    ///
-    /// When paused: returns None
-    pub fn update(&mut self, delta: Duration) -> Vec<&midi_file::MidiEvent> {
+    fn update(&mut self, delta: Duration) -> Vec<&midi_file::MidiEvent> {
+        self.update_with_observer(delta, |_, _| {})
+    }
+
+    /// Returns the MIDI events reached during this update and reports events
+    /// that are actually forwarded to the configured output.
+    pub fn update_with_observer<F>(
+        &mut self,
+        delta: Duration,
+        mut observer: F,
+    ) -> Vec<&midi_file::MidiEvent>
+    where
+        F: FnMut(u8, &midi_file::MidiEvent),
+    {
         self.play_along.update();
 
         let events = self.playback.update(delta);
@@ -81,6 +91,7 @@ impl MidiPlayer {
                 PlayerConfig::Auto => {
                     self.output // TODO: Send to multiple outputs
                         .midi_event(u4::new(channel), event.message);
+                    observer(channel, event);
                 }
                 PlayerConfig::Human => {
                     self.play_along
@@ -91,6 +102,7 @@ impl MidiPlayer {
                     // and other non-note events so the track still sounds as intended.
                     if should_forward_human_event(&event.message) {
                         self.output.midi_event(u4::new(channel), event.message);
+                        observer(channel, event);
                     }
                 }
                 PlayerConfig::Mute => {}

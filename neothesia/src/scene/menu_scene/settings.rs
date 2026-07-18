@@ -5,6 +5,7 @@ use crate::{
     scene::menu_scene::{MsgFn, Popup, icons, neo_btn_icon, on_async},
     utils::BoxFuture,
 };
+use cyma_core::{MAX_RESPONSE_TIME_MS, RESPONSE_TIME_STEP_MS};
 use nuon::TextJustify;
 
 use super::UiState;
@@ -143,6 +144,48 @@ impl super::MenuScene {
                             .build(ui, rows)
                         {
                             ctx.config.set_note_labels(!ctx.config.note_labels());
+                        }
+                    });
+
+                nuon::translate().y(10.0).add_to_current(ui);
+
+                nuon::settings_section("Cyma")
+                    .width(body_w)
+                    .build(ui, |ui, rows, spacer| {
+                        let enabled = ctx.cyma_enabled();
+                        if nuon::settings_row_toggler()
+                            .title("Enable Cyma")
+                            .subtitle("Analyze active MIDI notes")
+                            .value(enabled)
+                            .build(ui, rows)
+                        {
+                            ctx.set_cyma_enabled(!enabled);
+                        }
+
+                        if ctx.cyma_enabled() {
+                            spacer(ui);
+
+                            let chord = ctx
+                                .cyma_harmonic_state()
+                                .map(|state| state.chord.to_string())
+                                .filter(|name| !name.is_empty())
+                                .unwrap_or_else(|| "Unknown".to_string());
+
+                            nuon::settings_row()
+                                .title("Detected Chord")
+                                .subtitle(chord)
+                                .build(ui, rows);
+
+                            spacer(ui);
+
+                            self::update_cyma_response_time(
+                                ctx,
+                                nuon::settings_row_spin()
+                                    .title("Response Time")
+                                    .subtitle(format!("{} ms", ctx.config.cyma().response_time_ms))
+                                    .id("cyma-response-time")
+                                    .build(ui, rows),
+                            );
                         }
                     });
             });
@@ -415,6 +458,19 @@ pub fn update_audio_gain(ctx: &mut Context, kind: nuon::SettingsRowSpinResult) {
 
     ctx.config
         .set_audio_gain((ctx.config.audio_gain() * 10.0).round() / 10.0);
+}
+
+pub fn update_cyma_response_time(ctx: &mut Context, kind: nuon::SettingsRowSpinResult) {
+    let current = ctx.config.cyma().response_time_ms;
+    let response_time_ms = match kind {
+        nuon::SettingsRowSpinResult::Plus => current
+            .saturating_add(RESPONSE_TIME_STEP_MS)
+            .min(MAX_RESPONSE_TIME_MS),
+        nuon::SettingsRowSpinResult::Minus => current.saturating_sub(RESPONSE_TIME_STEP_MS),
+        nuon::SettingsRowSpinResult::Idle => current,
+    };
+
+    ctx.config.set_cyma_response_time_ms(response_time_ms);
 }
 
 pub fn update_range_start(ctx: &mut Context, kind: nuon::SettingsRowSpinResult) {

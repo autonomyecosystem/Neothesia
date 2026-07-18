@@ -123,6 +123,12 @@ impl MidiState {
     pub fn pitch_class_weights(&self) -> [f32; PITCH_CLASS_COUNT] {
         let mut weights = [0.0; PITCH_CLASS_COUNT];
 
+        self.accumulate_pitch_class_weights(&mut weights);
+
+        normalize_weights(weights)
+    }
+
+    pub(crate) fn accumulate_pitch_class_weights(&self, weights: &mut [f32; PITCH_CLASS_COUNT]) {
         for channel in &self.channels {
             for (note, state) in channel.notes.iter().enumerate() {
                 if state.is_active() {
@@ -131,8 +137,6 @@ impl MidiState {
                 }
             }
         }
-
-        normalize_weights(weights)
     }
 
     pub(crate) fn active_summary(&self) -> (u16, usize) {

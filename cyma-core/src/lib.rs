@@ -11,7 +11,9 @@ mod pitch;
 
 pub use chord::{Chord, ChordQuality, deduce_chord_name, recognize_midi_notes};
 pub use color::{MusicalColor, compose_musical_color};
-pub use config::CymaConfig;
+pub use config::{
+    CymaConfig, DEFAULT_RESPONSE_TIME_MS, MAX_RESPONSE_TIME_MS, RESPONSE_TIME_STEP_MS,
+};
 pub use harmony::{HarmonicState, SmoothedHarmonicState, smoothing_alpha};
 pub use midi::{MidiEvent, MidiInputError, MidiState};
 pub use pitch::{PITCH_CLASS_COUNT, PitchClass};

@@ -244,7 +244,7 @@ impl Scene for FreeplayScene {
         }
 
         if event.key_released(Key::Named(NamedKey::Space)) && self.preview.is_some() {
-            recorder::toggle_preview_playback(self);
+            recorder::toggle_preview_playback(self, ctx);
         }
 
         super::handle_nuon_window_event(&mut self.nuon, event, ctx);

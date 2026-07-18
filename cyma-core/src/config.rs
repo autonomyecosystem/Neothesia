@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_RESPONSE_TIME_MS: u16 = 160;
+pub const MAX_RESPONSE_TIME_MS: u16 = 2_000;
+pub const RESPONSE_TIME_STEP_MS: u16 = 20;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -20,7 +22,11 @@ impl Default for CymaConfig {
 
 impl CymaConfig {
     pub fn response_time_seconds(self) -> f32 {
-        f32::from(self.response_time_ms) / 1_000.0
+        f32::from(self.response_time_ms.min(MAX_RESPONSE_TIME_MS)) / 1_000.0
+    }
+
+    pub fn set_response_time_ms(&mut self, response_time_ms: u16) {
+        self.response_time_ms = response_time_ms.min(MAX_RESPONSE_TIME_MS);
     }
 }
 
@@ -51,5 +57,13 @@ mod tests {
         let decoded: CymaConfig = ron::from_str("(enabled:true)").unwrap();
         assert!(decoded.enabled);
         assert_eq!(decoded.response_time_ms, DEFAULT_RESPONSE_TIME_MS);
+    }
+
+    #[test]
+    fn response_time_is_bounded() {
+        let mut config = CymaConfig::default();
+        config.set_response_time_ms(u16::MAX);
+        assert_eq!(config.response_time_ms, MAX_RESPONSE_TIME_MS);
+        assert_eq!(config.response_time_seconds(), 2.0);
     }
 }

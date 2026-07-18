@@ -1,6 +1,6 @@
 use crate::{
     Chord, MidiState, MusicalColor, PITCH_CLASS_COUNT, chord::recognize_pitch_class_mask,
-    compose_musical_color,
+    compose_musical_color, midi::normalize_weights,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -30,9 +30,24 @@ impl Default for HarmonicState {
 
 impl HarmonicState {
     pub fn from_midi(state: &MidiState) -> Self {
-        let pitch_class_weights = state.pitch_class_weights();
-        let (active_pitch_classes, active_note_count) = state.active_summary();
-        let chord = recognize_pitch_class_mask(active_pitch_classes, active_note_count);
+        Self::from_midi_states(&[state])
+    }
+
+    pub fn from_midi_states(states: &[&MidiState]) -> Self {
+        let mut pitch_class_weights = [0.0; PITCH_CLASS_COUNT];
+        let mut active_pitch_classes = 0_u16;
+        let mut active_note_count = 0_usize;
+
+        for state in states {
+            state.accumulate_pitch_class_weights(&mut pitch_class_weights);
+            let (state_pitch_classes, state_note_count) = state.active_summary();
+            active_pitch_classes |= state_pitch_classes;
+            active_note_count += state_note_count;
+        }
+
+        let pitch_class_weights = normalize_weights(pitch_class_weights);
+        let unique_pitch_class_count = active_pitch_classes.count_ones() as usize;
+        let chord = recognize_pitch_class_mask(active_pitch_classes, unique_pitch_class_count);
         let color = compose_musical_color(pitch_class_weights);
         let consonance = consonance(&pitch_class_weights);
         let tension = if active_note_count == 0 {
@@ -208,5 +223,37 @@ mod tests {
         assert_eq!(first, second);
         assert!((first.current().color.red - 0.5).abs() < 1.0e-6);
         assert!(first.current().is_finite());
+    }
+
+    #[test]
+    fn combines_independent_midi_sources() {
+        let mut user = MidiState::default();
+        let mut file = MidiState::default();
+
+        user.apply(MidiEvent::NoteOn {
+            channel: 0,
+            note: 60,
+            velocity: 100,
+        })
+        .unwrap();
+        for note in [64, 67] {
+            file.apply(MidiEvent::NoteOn {
+                channel: 0,
+                note,
+                velocity: 100,
+            })
+            .unwrap();
+        }
+
+        let state = HarmonicState::from_midi_states(&[&user, &file]);
+        assert_eq!(state.chord.to_string(), "CM");
+        assert_eq!(state.active_note_count, 3);
+        assert!((state.pitch_class_weights.iter().sum::<f32>() - 1.0).abs() < 1.0e-6);
+    }
+
+    #[test]
+    fn harmonic_chord_is_independent_from_octave_duplicates() {
+        let state = state_for(&[48, 60, 72]);
+        assert_eq!(state.chord.to_string(), "C");
     }
 }
