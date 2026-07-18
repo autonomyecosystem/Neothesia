@@ -153,6 +153,10 @@ impl Config {
         self.cyma.particles_enabled = enabled;
     }
 
+    pub fn set_cyma_hud_enabled(&mut self, enabled: bool) {
+        self.cyma.hud_enabled = enabled;
+    }
+
     pub fn separate_channels(&self) -> bool {
         self.devices.separate_channels
     }
@@ -306,6 +310,7 @@ mod tests {
         config.set_cyma_visualization(CymaVisualization::Surface3d);
         config.set_cyma_quality(CymaQuality::High);
         config.set_cyma_particles_enabled(true);
+        config.set_cyma_hud_enabled(true);
 
         let encoded = ron_options()
             .to_string(&Model::from_config(config))
@@ -317,5 +322,6 @@ mod tests {
         assert_eq!(decoded.cyma().visualization, CymaVisualization::Surface3d);
         assert_eq!(decoded.cyma().quality, CymaQuality::High);
         assert!(decoded.cyma().particles_enabled);
+        assert!(decoded.cyma().hud_enabled);
     }
 }

@@ -3,7 +3,7 @@
 ## Stato e vincoli verificati
 
 - Upstream: `PolyMeilex/Neothesia`, branch di base `master`, commit `bb3be49`, licenza GPL-3.0.
-- Branch di lavoro: `feature/neothesia-cyma-phase-4`.
+- Branch di lavoro: `feature/neothesia-cyma-phase-5`.
 - Target operativo della sessione: Windows x86_64 GNU; il core resta privo di dipendenze specifiche di piattaforma.
 - Il workspace è definito in `Cargo.toml`; l'app usa `neothesia/Cargo.toml` e il rendering/config condivisi sono in `neothesia-core/Cargo.toml`.
 - Flusso MIDI reale: `neothesia/src/input_manager/mod.rs` normalizza Note On con velocity zero, invia `NeothesiaEvent::MidiInput` a `neothesia/src/main.rs`, che inoltra l'evento alla `Scene` attiva definita in `neothesia/src/scene/mod.rs`.
@@ -40,6 +40,18 @@
    - Renderizzare Cyma su target off-screen scalati per preset, quindi comporre sulla surface; Low/Medium/High ridurranno risoluzione, modi massimi, densità mesh e particelle.
    - Richiedere `TIMESTAMP_QUERY` in `wgpu-jumpstart/src/gpu.rs` solo quando supportato dall'adapter; mostrare GPU `N/A` senza interrompere il renderer quando non disponibile.
    - Integrare opzioni e metriche in `neothesia/src/{context,main}.rs` e `neothesia/src/scene/menu_scene/settings.rs`, preservando il trait `Scene`.
+5. **HUD educativo e validazione prestazionale Windows - completata il 18 luglio 2026**
+   - Aggiungere a `cyma-core/src/config.rs` un toggle HUD disattivato per default e propagarlo tramite `neothesia-core/src/config/mod.rs` e il pannello `neothesia/src/scene/menu_scene/settings.rs`.
+   - Creare un modello di presentazione testabile e un builder Nuon condiviso in `neothesia/src/cyma_hud.rs`, usato da `neothesia/src/scene/freeplay/mod.rs` e `neothesia/src/scene/playing_scene/mod.rs` senza duplicare logica armonica.
+   - Mostrare accordo, pitch class attive, colore composto, consonanza/tensione, modalità/qualità e budget CPU/GPU, distinguendo esplicitamente euristiche artistiche e base modale fisicamente motivata.
+   - Sostituire in `cyma-core/src/modal.rs` il gradiente nodale a differenze finite con un campionamento analitico valore+gradiente in un solo pass sui modi; `neothesia-core/src/render/cyma/particles.rs` riutilizzerà il risultato per attrazione e opacità.
+   - Aggiungere probe prestazionali release ignorati di default in `cyma-core/tests/windows_performance.rs` e nei test particellari, eseguibili esplicitamente su Windows senza rendere flaky la suite standard.
+   - Conservare il trait `Scene`, il flusso MIDI e il frame graph della fase 4; HUD disattivato e Cyma disattivato devono mantenere il comportamento upstream.
+6. **Modalità Cyma autonoma, piastra quadrata e tastiera cromatica - pianificata**
+   - Aggiungere dal menu una modalità Cyma autonoma, utilizzabile senza entrare nella Playing Scene e senza creare una seconda connessione MIDI; la prima implementazione resterà nella finestra principale, mentre un'eventuale finestra Windows distaccata richiederà una decisione esplicita separata.
+   - Interpretare il dominio visuale come una superficie quadrata `1 m × 1 m` e avvicinare la resa alle figure di sabbia ottenute con il metodo di Chladni, introducendo una base modale da piastra quadrata sottile e preset fisici espliciti. Il mapping nota MIDI -> modo e colore resterà documentato come trasformazione artistica, non come misura sperimentale della piastra.
+   - Riutilizzare palette e pitch class di `cyma-core` per colorare i tasti attivi della tastiera Neothesia; quando Cyma è disattivato i colori e il comportamento upstream resteranno invariati.
+   - Condividere renderer, stato armonico, HUD e configurazione tra Free Play, Playing e modalità autonoma, senza duplicare riconoscimento degli accordi, gestione MIDI o pipeline GPU.
 
 ## Fondamento fisico e trasformazioni artistiche
 
@@ -48,18 +60,37 @@
 
 ## Verifica corrente
 
-- `cargo fmt --all -- --check`: superato.
-- `cargo check -p cyma-core -p neothesia-core -p neothesia --offline`: superato su Windows GNU.
-- Test mirati superati: 47 test totali, eseguiti come 29 test `cyma-core`, 10 test `neothesia-core --lib` e 8 test `neothesia --bin neothesia`.
+- `cargo fmt --all -- --check`: superato dopo le modifiche della fase 5.
+- `cargo check -p cyma-core -p neothesia-core -p neothesia --offline`: superato su Windows GNU; una ripetizione in un target temporaneo pulito ha superato il limite operativo di 180 secondi senza emettere errori, dopo che `cargo run` aveva già compilato gli stessi crate nello stesso target.
+- Test mirati superati: 52 test, eseguiti come 30 test `cyma-core`, 11 test `neothesia-core --lib` e 11 test `neothesia --bin neothesia`; i due probe prestazionali manuali restano ignorati nella suite standard.
 - I test renderer verificano parsing e validazione Naga dei quattro shader WGSL, dimensione/allineamento/padding dell'uniform, preset di qualità, mesh, particelle e timer; il draw off-screen 64×64 con compositing e readback GPU non nero per C-E-G è superato su Intel Iris Xe/Vulkan.
 - `cargo clippy -p cyma-core --all-targets -- -D warnings`: superato senza warning.
 - `cargo clippy -p wgpu-jumpstart --all-targets -- -D warnings`: superato senza warning.
 - Il Clippy mirato su `neothesia-core` e `neothesia`, ripetuto consentendo esclusivamente `dead_code` e `unused_mut` già presenti upstream, è superato senza nuovi warning Cyma.
-- `cargo run -p neothesia` con configurazione temporanea isolata 3D/Medium/particelle e `test.mid`: avvio riuscito, Intel Iris Xe inizializzata tramite Vulkan con timestamp query, processo responsivo, resize 900×650 riuscito e chiusura pulita. Anche l'avvio normale senza file è responsivo e si chiude pulitamente. Configurazione e log temporanei sono stati rimossi.
+- I probe release Windows sono superati: aggiornamento armonico medio `0,011016 ms/update` e simulazione di 768 particelle High `0,530 ms/frame`.
+- `cargo run -p neothesia`: compilazione e avvio reali riusciti usando un target temporaneo scrivibile, necessario perché il `target` nel workspace Google Drive è marcato read-only. Intel Iris Xe è stata inizializzata tramite Vulkan con timestamp query.
+- Verifica manuale DPI-aware con configurazione temporanea 3D/Medium/particelle/HUD e `test.mid`: Free Play ha riconosciuto C-E-G come `CM`; Playing ha mostrato note file, superficie, particelle, accordo e metriche; resize a 850×760, ritorno al menu da entrambe le scene e chiusura pulita con codice 0 sono riusciti. L'HUD resta interamente visibile alla dimensione verificata.
 - `cargo check --workspace` e `cargo test --workspace`: non completabili per `ffmpeg-sys-next`; il build script non trova il comando `pkg-config` necessario per `libavutil`. Il blocco riguarda `ffmpeg-encoder`/CLI e non i crate modificati.
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`: non completabile perché `fluidlite-sys` non trova `gcc.exe` e l'header C `string.h`. Resta inoltre il warning upstream già verificato in `midi-file/examples/play.rs` (`useless_borrows_in_formatting` per `&out_ports[0]`) quando la build riesce a raggiungere quell'esempio.
 - Clippy e build sui crate applicativi riportano inoltre warning upstream preesistenti: `home` e `xdg_config` inutilizzate su Windows in `neothesia-core/src/utils/resources.rs`, e `mut` non necessario per `attributes` in `neothesia/src/main.rs`. Non sono stati corretti perché estranei alla fase.
-- Verifiche non eseguibili in modo affidabile in questa sessione: tastiera MIDI hardware, navigazione manuale in Free Play, click sui controlli Cyma, ritorno al menu dalla Playing Scene e misura visiva dei 60 FPS. Le metriche CPU/GPU sono esposte nella UI, ma i target `<1 ms` e 60 FPS non sono stati certificati con un benchmark dedicato.
+- Verifiche non eseguibili in questa sessione: tastiera MIDI hardware e misura strumentale esterna della fluidità percepita. Il budget CPU puro è certificato dai probe; l'HUD ha mostrato `60 FPS OK` e tempi GPU intorno a `0,21 ms` negli scenari manuali, ma non sostituisce un profiler esterno.
+
+## Esito fase 5
+
+- `CymaConfig` espone `hud_enabled`, disattivato per default e deserializzato retrocompatibilmente. Il pannello impostazioni persiste il toggle senza modificare il comportamento standard quando Cyma o HUD sono disattivati.
+- `neothesia/src/cyma_hud.rs` costruisce un unico modello educativo condiviso da Free Play e Playing. Mostra accordo, pitch class, colore, consonanza/tensione, modalità, qualità, stato renderer e budget CPU/GPU, distinguendo euristiche percettive/artistiche e base modale fisicamente motivata.
+- `ModalField::sample_with_node_gradient` calcola valore del campo e gradiente analitico di `abs(campo)` in un solo pass sui modi. Input o risultati non finiti vengono neutralizzati e il comportamento resta deterministico.
+- La simulazione particellare usa un solo campionamento modale per particella e frame invece dei cinque campionamenti precedenti. Il probe High con 768 particelle resta ampiamente entro il budget iniziale.
+- L'HUD usa un layer Nuon overlay condiviso senza modificare il trait `Scene`. Il primo screenshot apparentemente tagliato dipendeva dalla finestra predefinita più larga dell'area visibile a DPI 125%; la ripetizione DPI-aware a 850×760 ha confermato ancoraggio e resize corretti.
+- Compromesso: l'HUD opzionale costruisce piccole stringhe di presentazione per frame, coerentemente con il modello retained-immediate di Nuon. Non introduce allocazioni nel renderer Cyma, nella simulazione particellare o nella logica armonica pura.
+
+## File modificati nella fase 5
+
+- Configurazione e campionamento puro: `cyma-core/src/{config,lib,modal}.rs` e `cyma-core/tests/windows_performance.rs`.
+- Configurazione persistente: `neothesia-core/src/config/mod.rs`.
+- Simulazione e probe particellare: `neothesia-core/src/render/cyma/particles.rs`.
+- HUD e integrazione scene: `neothesia/src/{main,cyma_hud}.rs`, `neothesia/src/scene/freeplay/mod.rs`, `neothesia/src/scene/playing_scene/mod.rs` e `neothesia/src/scene/menu_scene/settings.rs`.
+- Documentazione: `docs/CYMA_IMPLEMENTATION_PLAN.md`.
 
 ## Esito fase 4
 

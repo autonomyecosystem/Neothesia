@@ -74,6 +74,7 @@ pub struct CymaConfig {
     pub visualization: CymaVisualization,
     pub quality: CymaQuality,
     pub particles_enabled: bool,
+    pub hud_enabled: bool,
 }
 
 impl Default for CymaConfig {
@@ -84,6 +85,7 @@ impl Default for CymaConfig {
             visualization: CymaVisualization::default(),
             quality: CymaQuality::default(),
             particles_enabled: false,
+            hud_enabled: false,
         }
     }
 }
@@ -110,6 +112,7 @@ mod tests {
         assert_eq!(config.visualization, CymaVisualization::Field2d);
         assert_eq!(config.quality, CymaQuality::Medium);
         assert!(!config.particles_enabled);
+        assert!(!config.hud_enabled);
     }
 
     #[test]
@@ -120,6 +123,7 @@ mod tests {
             visualization: CymaVisualization::Surface3d,
             quality: CymaQuality::High,
             particles_enabled: true,
+            hud_enabled: true,
         };
         let encoded = ron::to_string(&config).unwrap();
         let decoded: CymaConfig = ron::from_str(&encoded).unwrap();
@@ -134,6 +138,7 @@ mod tests {
         assert_eq!(decoded.visualization, CymaVisualization::Field2d);
         assert_eq!(decoded.quality, CymaQuality::Medium);
         assert!(!decoded.particles_enabled);
+        assert!(!decoded.hud_enabled);
     }
 
     #[test]

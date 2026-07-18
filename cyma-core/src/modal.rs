@@ -30,6 +30,22 @@ pub struct ModalComponent {
     pub phase_gain: f32,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct ModalSample {
+    pub value: f32,
+    pub node_gradient: [f32; 2],
+}
+
+impl ModalSample {
+    pub fn is_finite(self) -> bool {
+        self.value.is_finite()
+            && self
+                .node_gradient
+                .iter()
+                .all(|component| component.is_finite())
+    }
+}
+
 impl ModalComponent {
     pub fn is_finite(self) -> bool {
         self.amplitude.is_finite() && self.phase_gain.is_finite()
@@ -124,35 +140,59 @@ impl ModalField {
     }
 
     pub fn sample(&self, x: f32, y: f32) -> f32 {
+        self.sample_with_node_gradient(x, y).value
+    }
+
+    pub fn sample_with_node_gradient(&self, x: f32, y: f32) -> ModalSample {
         if !x.is_finite() || !y.is_finite() || self.activity <= f32::EPSILON {
-            return 0.0;
+            return ModalSample::default();
         }
 
         let x = x.clamp(0.0, 1.0);
         let y = y.clamp(0.0, 1.0);
         let mut value = 0.0;
+        let mut gradient = [0.0; 2];
 
         for component in self.components() {
-            let spatial = (std::f32::consts::PI * f32::from(component.mode_x) * x).sin()
-                * (std::f32::consts::PI * f32::from(component.mode_y) * y).sin();
-            value += component.amplitude * spatial * component.phase_gain;
+            let frequency_x = std::f32::consts::PI * f32::from(component.mode_x);
+            let frequency_y = std::f32::consts::PI * f32::from(component.mode_y);
+            let phase_x = frequency_x * x;
+            let phase_y = frequency_y * y;
+            let sin_x = phase_x.sin();
+            let sin_y = phase_y.sin();
+            let gain = component.amplitude * component.phase_gain;
+
+            value += gain * sin_x * sin_y;
+            gradient[0] += gain * frequency_x * phase_x.cos() * sin_y;
+            gradient[1] += gain * frequency_y * sin_x * phase_y.cos();
         }
 
-        value / self.activity.max(1.0e-4)
+        let normalization = self.activity.max(MIN_COMPONENT_AMPLITUDE);
+        value /= normalization;
+        gradient[0] /= normalization;
+        gradient[1] /= normalization;
+
+        let direction = if value > 0.0 {
+            1.0
+        } else if value < 0.0 {
+            -1.0
+        } else {
+            0.0
+        };
+        let sample = ModalSample {
+            value,
+            node_gradient: [gradient[0] * direction, gradient[1] * direction],
+        };
+
+        if sample.is_finite() {
+            sample
+        } else {
+            ModalSample::default()
+        }
     }
 
-    pub fn node_gradient(&self, x: f32, y: f32, epsilon: f32) -> [f32; 2] {
-        if !x.is_finite() || !y.is_finite() || !epsilon.is_finite() || epsilon <= 0.0 {
-            return [0.0; 2];
-        }
-
-        let left = self.sample(x - epsilon, y).abs();
-        let right = self.sample(x + epsilon, y).abs();
-        let down = self.sample(x, y - epsilon).abs();
-        let up = self.sample(x, y + epsilon).abs();
-        let denominator = 2.0 * epsilon;
-
-        [(right - left) / denominator, (up - down) / denominator]
+    pub fn node_gradient(&self, x: f32, y: f32) -> [f32; 2] {
+        self.sample_with_node_gradient(x, y).node_gradient
     }
 }
 
@@ -254,16 +294,38 @@ mod tests {
         assert!(field.sample(0.0, 0.5).abs() < 1.0e-6);
         assert!(field.sample(0.5, 0.0).abs() < 1.0e-6);
 
-        let first = field.node_gradient(0.37, 0.61, 0.002);
-        let second = field.node_gradient(0.37, 0.61, 0.002);
+        let first = field.node_gradient(0.37, 0.61);
+        let second = field.node_gradient(0.37, 0.61);
         assert_eq!(first, second);
         assert!(first.iter().all(|value| value.is_finite()));
+    }
+
+    #[test]
+    fn analytical_node_gradient_matches_finite_difference() {
+        let field = ModalField::from_harmonic(&harmonic_for(&[60, 64, 67]));
+        let x = 0.37;
+        let y = 0.61;
+        let epsilon = 1.0e-3;
+        let expected = [
+            (field.sample(x + epsilon, y).abs() - field.sample(x - epsilon, y).abs())
+                / (2.0 * epsilon),
+            (field.sample(x, y + epsilon).abs() - field.sample(x, y - epsilon).abs())
+                / (2.0 * epsilon),
+        ];
+        let analytical = field.node_gradient(x, y);
+
+        assert!((analytical[0] - expected[0]).abs() < 2.0e-3);
+        assert!((analytical[1] - expected[1]).abs() < 2.0e-3);
     }
 
     #[test]
     fn invalid_sample_inputs_are_zeroed() {
         let field = ModalField::from_harmonic(&harmonic_for(&[60]));
         assert_eq!(field.sample(f32::NAN, 0.5), 0.0);
-        assert_eq!(field.node_gradient(0.5, 0.5, f32::NAN), [0.0; 2]);
+        assert_eq!(field.node_gradient(0.5, f32::NAN), [0.0; 2]);
+        assert_eq!(
+            field.sample_with_node_gradient(f32::INFINITY, 0.5),
+            ModalSample::default()
+        );
     }
 }

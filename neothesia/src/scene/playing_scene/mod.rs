@@ -12,7 +12,7 @@ use self::top_bar::TopBar;
 
 use super::{NuonRenderer, Scene};
 use crate::{
-    NeothesiaEvent, context::Context, cyma::CymaMidiSource, render::WaterfallRenderer,
+    NeothesiaEvent, context::Context, cyma::CymaMidiSource, cyma_hud, render::WaterfallRenderer,
     scene::MouseToMidiEventState, song::Song, utils::window::WinitEvent,
 };
 
@@ -227,6 +227,7 @@ impl Scene for PlayingScene {
         self.update_glow(delta);
 
         TopBar::update(self, ctx);
+        cyma_hud::build(ctx, &mut self.nuon, 90.0);
 
         super::render_nuon(&mut self.nuon, &mut self.nuon_renderer, ctx);
 

@@ -18,5 +18,5 @@ pub use config::{
 };
 pub use harmony::{HarmonicState, SmoothedHarmonicState, smoothing_alpha};
 pub use midi::{MidiEvent, MidiInputError, MidiState};
-pub use modal::{MAX_MODAL_COMPONENTS, ModalComponent, ModalField};
+pub use modal::{MAX_MODAL_COMPONENTS, ModalComponent, ModalField, ModalSample};
 pub use pitch::{PITCH_CLASS_COUNT, PitchClass};

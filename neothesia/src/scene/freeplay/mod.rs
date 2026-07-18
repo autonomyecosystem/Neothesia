@@ -11,6 +11,7 @@ use winit::{
 use crate::{
     NeothesiaEvent,
     context::Context,
+    cyma_hud,
     scene::{
         MouseToMidiEventState, NuonRenderer, Scene,
         freeplay::recorder::{FreeplayRecorder, Preview, RecorderStatus},
@@ -149,6 +150,8 @@ impl FreeplayScene {
             .height(25.0)
             .width(ctx.window_state.logical_size.width)
             .build(&mut self.nuon);
+
+        cyma_hud::build(ctx, &mut self.nuon, 42.0);
     }
 
     fn resize(&mut self, ctx: &mut Context) {

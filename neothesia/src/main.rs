@@ -2,6 +2,7 @@
 
 mod context;
 mod cyma;
+mod cyma_hud;
 mod icons;
 mod input_manager;
 mod output_manager;

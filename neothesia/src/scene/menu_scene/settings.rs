@@ -219,6 +219,18 @@ impl super::MenuScene {
 
                             spacer(ui);
 
+                            let hud_enabled = ctx.config.cyma().hud_enabled;
+                            if nuon::settings_row_toggler()
+                                .title("Educational HUD")
+                                .subtitle("Explain harmony, color, modes and frame budget")
+                                .value(hud_enabled)
+                                .build(ui, rows)
+                            {
+                                ctx.config.set_cyma_hud_enabled(!hud_enabled);
+                            }
+
+                            spacer(ui);
+
                             self::update_cyma_response_time(
                                 ctx,
                                 nuon::settings_row_spin()
