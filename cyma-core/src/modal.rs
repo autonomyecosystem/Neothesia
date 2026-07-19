@@ -1,12 +1,16 @@
 use crate::{HarmonicState, MusicalColor, PITCH_CLASS_COUNT};
 
 pub const MAX_MODAL_COMPONENTS: usize = 12;
+pub const PLATE_WIDTH_METERS: f32 = 1.0;
+pub const PLATE_HEIGHT_METERS: f32 = 1.0;
+pub const PLATE_AREA_SQUARE_METERS: f32 = PLATE_WIDTH_METERS * PLATE_HEIGHT_METERS;
 
 const MIN_COMPONENT_AMPLITUDE: f32 = 1.0e-4;
 const PHASE_STEP: f32 = std::f32::consts::TAU / PITCH_CLASS_COUNT as f32;
 
-// Artistic pitch-class mapping to standing-wave modes of an ideal rectangular membrane.
-// The modal basis is physically motivated; the association with pitch classes is not.
+// Artistic pitch-class mapping to standing-wave modes of an ideal, simply supported
+// square thin plate. The modal basis is physically motivated; the association with
+// pitch classes, component gains and phase relationship is not.
 const PITCH_CLASS_MODES: [(u8, u8); PITCH_CLASS_COUNT] = [
     (1, 1),
     (1, 2),
@@ -101,12 +105,17 @@ impl ModalField {
 
             let (mode_x, mode_y) = PITCH_CLASS_MODES[pitch_class];
             let phase = pitch_class as f32 * PHASE_STEP;
-            let modal_frequency = f32::from(mode_x * mode_x + mode_y * mode_y).sqrt();
+            // For a simply supported thin plate, angular modal frequency is proportional
+            // to m²/Lx² + n²/Ly². The proportionality constant depends on material,
+            // thickness and density, which are intentionally not claimed by this model.
+            let modal_frequency_ratio = f32::from(mode_x * mode_x)
+                / (PLATE_WIDTH_METERS * PLATE_WIDTH_METERS)
+                + f32::from(mode_y * mode_y) / (PLATE_HEIGHT_METERS * PLATE_HEIGHT_METERS);
             field.components[component_index] = ModalComponent {
                 mode_x,
                 mode_y,
                 amplitude,
-                phase_gain: 0.75 + 0.25 * (modal_frequency * 0.25 + phase).cos(),
+                phase_gain: 0.75 + 0.25 * (modal_frequency_ratio * 0.08 + phase).cos(),
             };
             field.component_count += 1;
             field.activity += amplitude;
@@ -143,21 +152,23 @@ impl ModalField {
         self.sample_with_node_gradient(x, y).value
     }
 
-    pub fn sample_with_node_gradient(&self, x: f32, y: f32) -> ModalSample {
-        if !x.is_finite() || !y.is_finite() || self.activity <= f32::EPSILON {
+    pub fn sample_with_node_gradient(&self, x_meters: f32, y_meters: f32) -> ModalSample {
+        if !x_meters.is_finite() || !y_meters.is_finite() || self.activity <= f32::EPSILON {
             return ModalSample::default();
         }
 
-        let x = x.clamp(0.0, 1.0);
-        let y = y.clamp(0.0, 1.0);
+        let x_meters = x_meters.clamp(0.0, PLATE_WIDTH_METERS);
+        let y_meters = y_meters.clamp(0.0, PLATE_HEIGHT_METERS);
         let mut value = 0.0;
         let mut gradient = [0.0; 2];
 
         for component in self.components() {
-            let frequency_x = std::f32::consts::PI * f32::from(component.mode_x);
-            let frequency_y = std::f32::consts::PI * f32::from(component.mode_y);
-            let phase_x = frequency_x * x;
-            let phase_y = frequency_y * y;
+            let frequency_x =
+                std::f32::consts::PI * f32::from(component.mode_x) / PLATE_WIDTH_METERS;
+            let frequency_y =
+                std::f32::consts::PI * f32::from(component.mode_y) / PLATE_HEIGHT_METERS;
+            let phase_x = frequency_x * x_meters;
+            let phase_y = frequency_y * y_meters;
             let sin_x = phase_x.sin();
             let sin_y = phase_y.sin();
             let gain = component.amplitude * component.phase_gain;
@@ -229,6 +240,13 @@ mod tests {
         assert_eq!(field.component_count(), 0);
         assert!(!field.is_active());
         assert!(field.is_finite());
+    }
+
+    #[test]
+    fn physical_plate_is_one_square_meter() {
+        assert_eq!(PLATE_WIDTH_METERS, 1.0);
+        assert_eq!(PLATE_HEIGHT_METERS, 1.0);
+        assert_eq!(PLATE_AREA_SQUARE_METERS, 1.0);
     }
 
     #[test]

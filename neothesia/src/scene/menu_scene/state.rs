@@ -147,3 +147,14 @@ pub fn freeplay(data: &UiState, ctx: &mut Context) {
         .send_event(NeothesiaEvent::FreePlay(data.song.clone()))
         .ok();
 }
+
+pub fn cyma(data: &UiState, ctx: &mut Context) {
+    connect_io(data, ctx);
+    if !ctx.cyma_enabled() {
+        ctx.set_cyma_enabled(true);
+    }
+
+    ctx.proxy
+        .send_event(NeothesiaEvent::CymaMode(data.song.clone()))
+        .ok();
+}

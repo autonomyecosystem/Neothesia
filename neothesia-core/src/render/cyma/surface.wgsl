@@ -19,16 +19,20 @@ struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) normal: vec3<f32>,
     @location(1) field_value: f32,
+    @location(2) uv: vec2<f32>,
 }
 
 fn modal_field(uv: vec2<f32>, component_count: u32) -> f32 {
     var value = 0.0;
+    let plate_size_m = max(cyma.viewport.zw, vec2<f32>(0.0001));
+    let position_m = uv * plate_size_m;
     for (var index = 0u; index < MAX_MODES; index += 1u) {
         if index >= component_count {
             break;
         }
         let mode = cyma.modes[index];
-        let spatial = sin(PI * mode.x * uv.x) * sin(PI * mode.y * uv.y);
+        let spatial = sin(PI * mode.x * position_m.x / plate_size_m.x)
+            * sin(PI * mode.y * position_m.y / plate_size_m.y);
         value += mode.z * spatial * mode.w;
     }
     return value / max(cyma.metrics.x, 0.0001);
@@ -37,8 +41,8 @@ fn modal_field(uv: vec2<f32>, component_count: u32) -> f32 {
 fn rotated_surface_position(uv: vec2<f32>, value: f32) -> vec3<f32> {
     let activity = clamp(cyma.metrics.x, 0.0, 1.0);
     let world = vec3<f32>(
-        (uv.x - 0.5) * 2.35,
-        (uv.y - 0.5) * 1.55,
+        (uv.x - 0.5) * 1.82,
+        (uv.y - 0.5) * 1.82,
         value * mix(0.12, 0.48, activity)
     );
     let angle = 0.88;
@@ -54,8 +58,8 @@ fn rotated_surface_position(uv: vec2<f32>, value: f32) -> vec3<f32> {
 fn clip_position(uv: vec2<f32>, value: f32) -> vec4<f32> {
     let rotated = rotated_surface_position(uv, value);
     return vec4<f32>(
-        rotated.x / 1.42,
-        rotated.y / 1.08 - 0.04,
+        rotated.x / 1.16,
+        rotated.y / 1.12 - 0.03,
         clamp(0.55 - rotated.z * 0.24, 0.02, 0.98),
         1.0
     );
@@ -82,7 +86,12 @@ fn vs_main(vertex: Vertex) -> VertexOutput {
     out.position = clip_position(vertex.uv, value);
     out.normal = normal;
     out.field_value = value;
+    out.uv = vertex.uv;
     return out;
+}
+
+fn hash_grain(uv: vec2<f32>) -> f32 {
+    return fract(sin(dot(floor(uv * 1024.0), vec2<f32>(127.1, 311.7))) * 43758.5453);
 }
 
 @fragment
@@ -94,9 +103,21 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let diffuse = 0.28 + max(dot(normalize(in.normal), light), 0.0) * 0.72;
     let node_width = mix(0.022, 0.055, tension);
     let node = 1.0 - smoothstep(node_width, node_width + 0.03, abs(in.field_value));
-    let surface_color = cyma.color.rgb * diffuse;
-    let node_color = mix(cyma.color.rgb, vec3<f32>(1.0), 0.3 + consonance * 0.35);
-    let color = mix(surface_color, node_color, node);
-    let alpha = activity * (0.28 + diffuse * 0.42 + node * 0.25);
+    let grain = hash_grain(in.uv);
+    let sand = node * mix(0.62, 1.0, grain);
+    let edge_distance = min(
+        min(in.uv.x, 1.0 - in.uv.x),
+        min(in.uv.y, 1.0 - in.uv.y)
+    );
+    let border = 1.0 - smoothstep(0.0, 0.012, edge_distance);
+    let surface_color = mix(vec3<f32>(0.035, 0.038, 0.045), cyma.color.rgb * 0.48, 0.72)
+        * (0.65 + diffuse * 0.55);
+    let sand_color = mix(
+        vec3<f32>(0.78, 0.68, 0.43),
+        cyma.color.rgb,
+        0.4 + consonance * 0.25
+    );
+    let color = mix(surface_color, sand_color, clamp(sand + border * 0.38, 0.0, 1.0));
+    let alpha = activity * (0.34 + diffuse * 0.36 + node * 0.26 + border * 0.12);
     return vec4<f32>(color, alpha);
 }

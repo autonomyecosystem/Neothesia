@@ -6,7 +6,10 @@ mod target;
 use std::time::Duration;
 
 use bytemuck::{Pod, Zeroable};
-use cyma_core::{CymaQuality, CymaVisualization, MAX_MODAL_COMPONENTS, ModalField};
+use cyma_core::{
+    CymaQuality, CymaVisualization, MAX_MODAL_COMPONENTS, ModalField, PLATE_HEIGHT_METERS,
+    PLATE_WIDTH_METERS,
+};
 use gpu_timer::GpuTimer;
 use particles::ParticleRenderer;
 use surface::SurfaceRenderer;
@@ -430,7 +433,12 @@ impl CymaUniform {
             .into_linear_rgba();
 
         Self {
-            viewport: [width as f32, height as f32, 0.0, 0.0],
+            viewport: [
+                width as f32,
+                height as f32,
+                PLATE_WIDTH_METERS,
+                PLATE_HEIGHT_METERS,
+            ],
             color,
             metrics: [
                 field.activity,
@@ -470,6 +478,12 @@ mod tests {
         assert_eq!(max_modes(CymaQuality::Low), 4);
         assert_eq!(max_modes(CymaQuality::Medium), 8);
         assert_eq!(max_modes(CymaQuality::High), MAX_MODAL_COMPONENTS);
+    }
+
+    #[test]
+    fn uniform_carries_the_one_meter_square_plate() {
+        let uniform = CymaUniform::from_modal_field(&ModalField::default(), 800, 600, 12);
+        assert_eq!(uniform.viewport, [800.0, 600.0, 1.0, 1.0]);
     }
 
     #[test]

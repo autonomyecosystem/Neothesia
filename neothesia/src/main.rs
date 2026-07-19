@@ -14,7 +14,7 @@ use std::{sync::Arc, time::Duration};
 
 use context::Context;
 use cyma::CymaMidiSource;
-use scene::{Scene, menu_scene, playing_scene};
+use scene::{Scene, cyma_scene, menu_scene, playing_scene};
 use song::Song;
 use utils::window::WindowState;
 
@@ -35,6 +35,7 @@ pub enum NeothesiaEvent {
     /// Go to playing scene
     Play(song::Song),
     FreePlay(Option<song::Song>),
+    CymaMode(Option<song::Song>),
     /// Go to main menu scene
     MainMenu(Option<song::Song>),
     MidiInput {
@@ -146,6 +147,11 @@ impl Neothesia {
             NeothesiaEvent::FreePlay(song) => {
                 self.context.reset_cyma_source(CymaMidiSource::File);
                 let to = scene::freeplay::FreeplayScene::new(&mut self.context, song);
+                self.game_scene = Box::new(to);
+            }
+            NeothesiaEvent::CymaMode(song) => {
+                self.context.reset_cyma_source(CymaMidiSource::File);
+                let to = cyma_scene::CymaScene::new(&mut self.context, song);
                 self.game_scene = Box::new(to);
             }
             NeothesiaEvent::MainMenu(song) => {

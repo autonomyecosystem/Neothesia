@@ -1,3 +1,4 @@
+use cyma_core::{PitchClass, pitch_class_color};
 use midi_file::midly::MidiMessage;
 use neothesia_core::{
     config::ColorSchemaV1,
@@ -13,6 +14,16 @@ pub struct Keyboard {
     renderer: KeyboardRenderer,
     song_config: SongConfig,
     pressed_by_user_colors: ColorSchemaV1,
+}
+
+fn cyma_color_schema(note: u8) -> ColorSchemaV1 {
+    let base = pitch_class_color(PitchClass::from_midi(note)).to_rgb8();
+    let dark = (
+        (f32::from(base.0) * 0.62).round() as u8,
+        (f32::from(base.1) * 0.62).round() as u8,
+        (f32::from(base.2) * 0.62).round() as u8,
+    );
+    ColorSchemaV1 { base, dark }
 }
 
 fn get_layout(
@@ -110,7 +121,7 @@ impl Keyboard {
         self.renderer.reset_notes()
     }
 
-    pub fn user_midi_event(&mut self, message: &MidiMessage) {
+    pub fn user_midi_event(&mut self, config: &Config, message: &MidiMessage) {
         let range_start = self.range().start() as usize;
 
         let (is_on, key) = match message {
@@ -121,9 +132,14 @@ impl Keyboard {
 
         if self.range().contains(key) {
             let id = key as usize - range_start;
-            let key = &mut self.renderer.key_states_mut()[id];
+            let color = if config.cyma().enabled {
+                cyma_color_schema(key)
+            } else {
+                self.pressed_by_user_colors.clone()
+            };
+            let state = &mut self.renderer.key_states_mut()[id];
 
-            key.set_pressed_by_user(is_on, &self.pressed_by_user_colors);
+            state.set_pressed_by_user(is_on, &color);
             self.renderer.invalidate_cache();
         }
     }
@@ -144,19 +160,44 @@ impl Keyboard {
             };
 
             if self.range().contains(key) && e.channel != 9 {
+                let note = key;
                 let id = key as usize - range_start;
-                let key = &mut self.renderer.key_states_mut()[id];
+                let state = &mut self.renderer.key_states_mut()[id];
 
                 if is_on {
-                    let color =
-                        &config.color_schema()[e.track_color_id % config.color_schema().len()];
-                    key.pressed_by_file_on(color);
+                    let color = if config.cyma().enabled {
+                        cyma_color_schema(note)
+                    } else {
+                        config.color_schema()[e.track_color_id % config.color_schema().len()]
+                            .clone()
+                    };
+                    state.pressed_by_file_on(&color);
                 } else {
-                    key.pressed_by_file_off();
+                    state.pressed_by_file_off();
                 }
 
                 self.renderer.invalidate_cache();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cyma_key_colors_follow_pitch_class_and_octave() {
+        assert_eq!(cyma_color_schema(60).base, (255, 0, 0));
+        assert_eq!(cyma_color_schema(60).base, cyma_color_schema(72).base);
+        assert_eq!(cyma_color_schema(61).base, (0, 128, 255));
+    }
+
+    #[test]
+    fn sharp_variant_is_darker_but_keeps_the_hue() {
+        let colors = cyma_color_schema(61);
+        assert!(colors.dark.1 < colors.base.1);
+        assert!(colors.dark.2 < colors.base.2);
+        assert_eq!(colors.dark.0, 0);
     }
 }

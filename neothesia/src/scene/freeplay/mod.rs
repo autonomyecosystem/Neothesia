@@ -262,7 +262,7 @@ impl Scene for FreeplayScene {
 
     fn midi_event(&mut self, ctx: &mut Context, channel: u8, message: &MidiMessage) {
         self.recorder.push_event(channel, *message);
-        self.keyboard.user_midi_event(message);
+        self.keyboard.user_midi_event(&ctx.config, message);
         ctx.output_manager
             .connection()
             .midi_event(0.into(), *message);

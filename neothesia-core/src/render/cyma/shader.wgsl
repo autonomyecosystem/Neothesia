@@ -28,10 +28,13 @@ fn vs_main(vertex: Vertex) -> VertexOutput {
     return out;
 }
 
-// Physically motivated basis: standing-wave eigenfunctions of an ideal
-// rectangular membrane. Pitch-to-mode mapping, phases and color are artistic.
+// Physically motivated basis: standing-wave eigenfunctions of an ideal,
+// simply supported square thin plate. Pitch-to-mode mapping, gains and color
+// are artistic; material, thickness and excitation are not calibrated.
 fn modal_field(uv: vec2<f32>, component_count: u32) -> f32 {
     var value = 0.0;
+    let plate_size_m = max(cyma.viewport.zw, vec2<f32>(0.0001));
+    let position_m = uv * plate_size_m;
 
     for (var index = 0u; index < MAX_MODES; index += 1u) {
         if index >= component_count {
@@ -43,11 +46,16 @@ fn modal_field(uv: vec2<f32>, component_count: u32) -> f32 {
         let mode_y = mode.y;
         let amplitude = mode.z;
         let phase_gain = mode.w;
-        let spatial = sin(PI * mode_x * uv.x) * sin(PI * mode_y * uv.y);
+        let spatial = sin(PI * mode_x * position_m.x / plate_size_m.x)
+            * sin(PI * mode_y * position_m.y / plate_size_m.y);
         value += amplitude * spatial * phase_gain;
     }
 
     return value;
+}
+
+fn hash_pixel(pixel: vec2<f32>) -> f32 {
+    return fract(sin(dot(pixel, vec2<f32>(127.1, 311.7))) * 43758.5453);
 }
 
 @fragment
@@ -59,20 +67,38 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let tension = clamp(cyma.metrics.z, 0.0, 1.0);
     let component_count = min(u32(cyma.metrics.w + 0.5), MAX_MODES);
 
-    let value = modal_field(in.uv, component_count) / max(activity, 0.0001);
+    let viewport = vec2<f32>(width, height);
+    let plate_side = max(min(width, height), 1.0);
+    let plate_origin = (viewport - vec2<f32>(plate_side)) * 0.5;
+    let plate_pixel = in.uv * viewport - plate_origin;
+    let plate_uv = plate_pixel / plate_side;
+    if any(plate_uv < vec2<f32>(0.0)) || any(plate_uv > vec2<f32>(1.0)) {
+        return vec4<f32>(0.0);
+    }
+
+    let value = modal_field(plate_uv, component_count) / max(activity, 0.0001);
     let distance_to_node = abs(value);
-    let node_width = mix(0.025, 0.06, tension);
-    let node = 1.0 - smoothstep(node_width, node_width + 0.035, distance_to_node);
+    let node_width = mix(0.018, 0.045, tension);
+    let node = 1.0 - smoothstep(node_width, node_width + 0.028, distance_to_node);
     let contours = 0.5 + 0.5 * cos(value * (18.0 + tension * 10.0));
 
-    let aspect = width / height;
-    let centered = (in.uv * 2.0 - vec2<f32>(1.0)) * vec2<f32>(aspect, 1.0);
-    let vignette = 1.0 - smoothstep(0.45, 1.35, length(centered));
+    let grain = hash_pixel(floor(plate_pixel));
+    let sand = node * mix(0.58, 1.0, grain);
+    let edge_distance = min(
+        min(plate_uv.x, 1.0 - plate_uv.x),
+        min(plate_uv.y, 1.0 - plate_uv.y)
+    );
+    let border = 1.0 - smoothstep(0.0, 0.008, edge_distance);
 
-    let base_color = cyma.color.rgb * (0.22 + contours * 0.08);
-    let node_color = mix(cyma.color.rgb, vec3<f32>(1.0), 0.25 + consonance * 0.35);
-    let color = mix(base_color, node_color, node);
-    let alpha = activity * vignette * (0.025 + contours * 0.025 + node * 0.32);
+    let plate_color = mix(vec3<f32>(0.025, 0.028, 0.035), cyma.color.rgb * 0.24, 0.62);
+    let sand_color = mix(
+        vec3<f32>(0.78, 0.68, 0.43),
+        cyma.color.rgb,
+        0.42 + consonance * 0.24
+    );
+    let base_color = plate_color * (0.72 + contours * 0.18);
+    let color = mix(base_color, sand_color, clamp(sand + border * 0.42, 0.0, 1.0));
+    let alpha = activity * (0.18 + contours * 0.06 + node * 0.68 + border * 0.22);
 
     return vec4<f32>(color, alpha);
 }

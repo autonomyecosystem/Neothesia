@@ -248,6 +248,18 @@ impl MenuScene {
                 {
                     state::freeplay(&self.state, ctx);
                 }
+
+                nuon::translate().x(btn_w + gap).add_to_current(ui);
+
+                if neo_btn()
+                    .size(btn_w, btn_h)
+                    .icon(icons::cone_icon())
+                    .color([100; 3])
+                    .tooltip("Cyma · 1 m² plate")
+                    .build(ui)
+                {
+                    state::cyma(&self.state, ctx);
+                }
             });
 
             if self.state.song().is_none() {
@@ -379,6 +391,10 @@ impl Scene for MenuScene {
 
                 if event.key_pressed(Key::Character("f")) {
                     state::freeplay(&self.state, ctx);
+                }
+
+                if event.key_pressed(Key::Character("c")) {
+                    state::cyma(&self.state, ctx);
                 }
             }
             Page::Settings => {

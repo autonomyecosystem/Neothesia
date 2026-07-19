@@ -94,7 +94,7 @@ pub(crate) fn build(ctx: &Context, ui: &mut nuon::Ui, top_offset: f32) {
             );
             label(
                 ui,
-                "Color: artistic mix · Modes: ideal membrane basis",
+                "Color: artistic mix · Plate: ideal 1 m² basis",
                 [44.0, 164.0, 266.0, 13.0],
                 10.5,
                 false,

@@ -3,7 +3,7 @@
 ## Stato e vincoli verificati
 
 - Upstream: `PolyMeilex/Neothesia`, branch di base `master`, commit `bb3be49`, licenza GPL-3.0.
-- Branch di lavoro: `feature/neothesia-cyma-phase-5`.
+- Branch di lavoro: `feature/neothesia-cyma-phase-6`.
 - Target operativo della sessione: Windows x86_64 GNU; il core resta privo di dipendenze specifiche di piattaforma.
 - Il workspace è definito in `Cargo.toml`; l'app usa `neothesia/Cargo.toml` e il rendering/config condivisi sono in `neothesia-core/Cargo.toml`.
 - Flusso MIDI reale: `neothesia/src/input_manager/mod.rs` normalizza Note On con velocity zero, invia `NeothesiaEvent::MidiInput` a `neothesia/src/main.rs`, che inoltra l'evento alla `Scene` attiva definita in `neothesia/src/scene/mod.rs`.
@@ -47,33 +47,51 @@
    - Sostituire in `cyma-core/src/modal.rs` il gradiente nodale a differenze finite con un campionamento analitico valore+gradiente in un solo pass sui modi; `neothesia-core/src/render/cyma/particles.rs` riutilizzerà il risultato per attrazione e opacità.
    - Aggiungere probe prestazionali release ignorati di default in `cyma-core/tests/windows_performance.rs` e nei test particellari, eseguibili esplicitamente su Windows senza rendere flaky la suite standard.
    - Conservare il trait `Scene`, il flusso MIDI e il frame graph della fase 4; HUD disattivato e Cyma disattivato devono mantenere il comportamento upstream.
-6. **Modalità Cyma autonoma, piastra quadrata e tastiera cromatica - pianificata**
-   - Aggiungere dal menu una modalità Cyma autonoma, utilizzabile senza entrare nella Playing Scene e senza creare una seconda connessione MIDI; la prima implementazione resterà nella finestra principale, mentre un'eventuale finestra Windows distaccata richiederà una decisione esplicita separata.
-   - Interpretare il dominio visuale come una superficie quadrata `1 m × 1 m` e avvicinare la resa alle figure di sabbia ottenute con il metodo di Chladni, introducendo una base modale da piastra quadrata sottile e preset fisici espliciti. Il mapping nota MIDI -> modo e colore resterà documentato come trasformazione artistica, non come misura sperimentale della piastra.
-   - Riutilizzare palette e pitch class di `cyma-core` per colorare i tasti attivi della tastiera Neothesia; quando Cyma è disattivato i colori e il comportamento upstream resteranno invariati.
-   - Condividere renderer, stato armonico, HUD e configurazione tra Free Play, Playing e modalità autonoma, senza duplicare riconoscimento degli accordi, gestione MIDI o pipeline GPU.
+6. **Modalità Cyma autonoma, piastra quadrata e tastiera cromatica - completata il 19 luglio 2026**
+   - Aggiungere `neothesia/src/scene/cyma_scene.rs` e `NeothesiaEvent::CymaMode` in `neothesia/src/main.rs`; la scena userà il renderer globale già registrato prima di `Scene::render`, la tastiera condivisa di `neothesia/src/scene/playing_scene/keyboard.rs` e l'HUD di `neothesia/src/cyma_hud.rs`, senza creare una seconda connessione MIDI. L'accesso sarà aggiunto a `neothesia/src/scene/menu_scene/{mod,state}.rs` e resterà nella finestra principale; una finestra Windows distaccata non fa parte di questa fase.
+   - Esporre in `cyma-core/src/color.rs` la palette deterministica per singola pitch class e riutilizzarla in `neothesia/src/scene/playing_scene/keyboard.rs` per le note utente e file. I tasti attivi useranno i colori Cyma solo quando Cyma è abilitato; altrimenti resteranno identici all'upstream.
+   - Interpretare `cyma-core/src/modal.rs` come piastra quadrata sottile idealmente appoggiata di lato `1 m`, area `1 m²`, usando coordinate fisiche `x/L` e `y/L`. Le forme modali separabili sono fisicamente motivate; associazione pitch class-modo, ampiezza, fase, colore e sovrapposizione restano trasformazioni artistiche.
+   - Aggiornare `neothesia-core/src/render/cyma/{mod.rs,shader.wgsl,surface.wgsl}` senza cambiare dimensione o allineamento dell'uniform: `viewport.zw` conterrà i lati fisici della piastra, il renderer 2D manterrà un dominio quadrato centrato e la resa userà linee nodali granulari simili a sabbia; la mesh 3D conserverà proporzioni quadrate prima della proiezione.
+   - Verificare con test puri palette, indipendenza dall'ottava, geometria `1 m × 1 m`, finitezza e determinismo; validare entrambi gli shader con Naga e provare manualmente su Windows accesso dal menu, input PC/MIDI, colori tasti, resize, ritorno al menu e chiusura pulita.
 
 ## Fondamento fisico e trasformazioni artistiche
 
-- Fondamento fisico implementato: funzioni proprie separabili `sin(m·π·x)·sin(n·π·y)` di una membrana rettangolare ideale con bordo fisso; gli zeri del campo composto generano linee nodali di tipo Chladni.
+- Fondamento fisico implementato: funzioni proprie separabili `sin(m·π·x/Lx)·sin(n·π·y/Ly)` di una piastra quadrata sottile idealmente appoggiata, con `Lx = Ly = 1 m`; gli zeri del campo composto generano linee nodali di tipo Chladni e la frequenza modale relativa scala con `m²/Lx² + n²/Ly²`.
 - Trasformazioni artistiche: associazione pitch class-colore, tabella pitch class-coppia modale, guadagno di fase, superposizione dei modi, spessore delle linee guidato dalla tensione e luminosità guidata dalla consonanza. Non costituiscono una simulazione quantitativa di una piastra reale, perché non includono materiale, spessore, smorzamento, eccitazione o condizioni al contorno calibrate.
 
 ## Verifica corrente
 
-- `cargo fmt --all -- --check`: superato dopo le modifiche della fase 5.
-- `cargo check -p cyma-core -p neothesia-core -p neothesia --offline`: superato su Windows GNU; una ripetizione in un target temporaneo pulito ha superato il limite operativo di 180 secondi senza emettere errori, dopo che `cargo run` aveva già compilato gli stessi crate nello stesso target.
-- Test mirati superati: 52 test, eseguiti come 30 test `cyma-core`, 11 test `neothesia-core --lib` e 11 test `neothesia --bin neothesia`; i due probe prestazionali manuali restano ignorati nella suite standard.
+- `cargo fmt --all -- --check`: superato dopo le modifiche della fase 6.
+- `cargo check -p cyma-core -p neothesia-core -p neothesia --offline`: superato su Windows GNU usando toolchain e target temporanei verificati.
+- Test mirati superati: 59 test, eseguiti come 34 test `cyma-core`, 12 test `neothesia-core --lib` e 13 test `neothesia --bin neothesia`; i due probe prestazionali manuali restano ignorati nella suite standard.
 - I test renderer verificano parsing e validazione Naga dei quattro shader WGSL, dimensione/allineamento/padding dell'uniform, preset di qualità, mesh, particelle e timer; il draw off-screen 64×64 con compositing e readback GPU non nero per C-E-G è superato su Intel Iris Xe/Vulkan.
 - `cargo clippy -p cyma-core --all-targets -- -D warnings`: superato senza warning.
 - `cargo clippy -p wgpu-jumpstart --all-targets -- -D warnings`: superato senza warning.
 - Il Clippy mirato su `neothesia-core` e `neothesia`, ripetuto consentendo esclusivamente `dead_code` e `unused_mut` già presenti upstream, è superato senza nuovi warning Cyma.
 - I probe release Windows sono superati: aggiornamento armonico medio `0,011016 ms/update` e simulazione di 768 particelle High `0,530 ms/frame`.
-- `cargo run -p neothesia`: compilazione e avvio reali riusciti usando un target temporaneo scrivibile, necessario perché il `target` nel workspace Google Drive è marcato read-only. Intel Iris Xe è stata inizializzata tramite Vulkan con timestamp query.
-- Verifica manuale DPI-aware con configurazione temporanea 3D/Medium/particelle/HUD e `test.mid`: Free Play ha riconosciuto C-E-G come `CM`; Playing ha mostrato note file, superficie, particelle, accordo e metriche; resize a 850×760, ritorno al menu da entrambe le scene e chiusura pulita con codice 0 sono riusciti. L'HUD resta interamente visibile alla dimensione verificata.
+- `cargo build -p neothesia --offline`: superato usando un target temporaneo scrivibile, necessario perché il `target` nel workspace Google Drive è marcato read-only.
+- La verifica manuale DPI-aware della fase 5 resta superata per Free Play e Playing. Il tentativo isolato della fase 6 ha avviato un processo Neothesia stabile e responsivo, ma la sessione GUI elevata non ha pubblicato un handle finestra winit; accesso al nuovo pulsante, input PC/MIDI, resize e ritorno al menu non sono quindi dichiarati verificati manualmente in questa sessione.
 - `cargo check --workspace` e `cargo test --workspace`: non completabili per `ffmpeg-sys-next`; il build script non trova il comando `pkg-config` necessario per `libavutil`. Il blocco riguarda `ffmpeg-encoder`/CLI e non i crate modificati.
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`: non completabile perché `fluidlite-sys` non trova `gcc.exe` e l'header C `string.h`. Resta inoltre il warning upstream già verificato in `midi-file/examples/play.rs` (`useless_borrows_in_formatting` per `&out_ports[0]`) quando la build riesce a raggiungere quell'esempio.
 - Clippy e build sui crate applicativi riportano inoltre warning upstream preesistenti: `home` e `xdg_config` inutilizzate su Windows in `neothesia-core/src/utils/resources.rs`, e `mut` non necessario per `attributes` in `neothesia/src/main.rs`. Non sono stati corretti perché estranei alla fase.
 - Verifiche non eseguibili in questa sessione: tastiera MIDI hardware e misura strumentale esterna della fluidità percepita. Il budget CPU puro è certificato dai probe; l'HUD ha mostrato `60 FPS OK` e tempi GPU intorno a `0,21 ms` negli scenari manuali, ma non sostituisce un profiler esterno.
+
+## Esito fase 6
+
+- Il menu espone una modalità Cyma autonoma tramite pulsante dedicato e tasto `C`. L'ingresso abilita Cyma se necessario, riusa connessioni input/output, stato armonico, renderer globale, HUD e tastiera esistenti e non modifica il trait `Scene`.
+- `CymaScene` resta nella finestra principale, gestisce input PC, mouse e MIDI attraverso gli adattatori condivisi e offre ritorno al menu tramite pulsante icona, `Esc` e pulsante indietro del mouse. Non crea una seconda connessione MIDI e non duplica il riconoscimento armonico.
+- `cyma-core` espone una palette pura per pitch class e conversione RGB8 finita. Tastiera utente e note file usano colori cromatici indipendenti dall'ottava soltanto quando Cyma è attivo; il percorso disattivato conserva gli schemi upstream.
+- Il dominio modale è una piastra quadrata idealmente appoggiata `1 m × 1 m`. Coordinate e frequenza modale relativa includono esplicitamente i lati fisici; mapping pitch-modo, ampiezza, fase, colore e sovrapposizione restano trasformazioni artistiche.
+- Il renderer 2D centra un quadrato nel viewport e aggiunge granularità deterministica alle linee nodali; la mesh 3D è quadrata prima della proiezione. Dimensione, allineamento e offset dell'uniform restano invariati a 240 byte e i quattro shader WGSL superano parsing e validazione Naga.
+- Compromesso: l'hash granulare è deterministico rispetto ai pixel del target e al preset di qualità, ma non pretende di simulare dinamica, massa o attrito di granelli reali. Una finestra Windows distaccata resta fuori ambito.
+
+## File modificati nella fase 6
+
+- Core musicale e modello fisico: `cyma-core/src/{color,lib,modal}.rs`.
+- Renderer e shader: `neothesia-core/src/render/cyma/{mod.rs,shader.wgsl,surface.wgsl}`.
+- Scena autonoma e navigazione: `neothesia/src/{main,cyma_hud}.rs`, `neothesia/src/scene/cyma_scene.rs`, `neothesia/src/scene/mod.rs` e `neothesia/src/scene/menu_scene/{mod,state}.rs`.
+- Tastiera condivisa: `neothesia/src/scene/playing_scene/{keyboard,mod}.rs` e `neothesia/src/scene/freeplay/mod.rs`.
+- Documentazione: `docs/CYMA_IMPLEMENTATION_PLAN.md`.
 
 ## Esito fase 5
 
