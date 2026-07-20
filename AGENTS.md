@@ -47,6 +47,9 @@ Completare una sola fase per volta. Al termine di ogni fase:
 
 - eseguire i controlli previsti;
 - aggiornare `docs/CYMA_IMPLEMENTATION_PLAN.md`;
+- aggiornare `docs/pages/cyma-operations.md` nello stesso branch e nella stessa
+  PR per ogni modifica funzionale, di configurazione o di release; registrare
+  comunque `Nessun impatto operativo` nella cronologia quando applicabile;
 - elencare i file modificati;
 - descrivere decisioni e compromessi;
 - segnalare test superati e test non eseguibili;

@@ -91,7 +91,8 @@
 - Renderer e shader: `neothesia-core/src/render/cyma/{mod.rs,shader.wgsl,surface.wgsl}`.
 - Scena autonoma e navigazione: `neothesia/src/{main,cyma_hud}.rs`, `neothesia/src/scene/cyma_scene.rs`, `neothesia/src/scene/mod.rs` e `neothesia/src/scene/menu_scene/{mod,state}.rs`.
 - Tastiera condivisa: `neothesia/src/scene/playing_scene/{keyboard,mod}.rs` e `neothesia/src/scene/freeplay/mod.rs`.
-- Documentazione: `docs/CYMA_IMPLEMENTATION_PLAN.md`.
+- Documentazione: `docs/CYMA_IMPLEMENTATION_PLAN.md` e il manuale operativo
+  versionato `docs/pages/cyma-operations.md`.
 
 ## Esito fase 5
 

@@ -8,6 +8,7 @@ export default defineConfig({
     nav: [
       { text: "Home", link: "/" },
       { text: "How-to", link: "/pages/installation" },
+      { text: "Manuale Cyma", link: "/pages/cyma-operations" },
     ],
 
     sidebar: [
@@ -16,6 +17,7 @@ export default defineConfig({
         items: [
           { text: "Installation", link: "/pages/installation" },
           { text: "Shortcuts", link: "/pages/shortcuts" },
+          { text: "Manuale Cyma", link: "/pages/cyma-operations" },
           { text: "Customization", link: "/pages/customization" },
           { text: "Video Encoding", link: "/pages/video-encoding" },
         ],

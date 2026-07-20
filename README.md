@@ -38,6 +38,7 @@ All binary releases:
 
 - [FAQ](https://polymeilex.github.io/Neothesia/pages/installation.html)
 - [Video encoding](https://polymeilex.github.io/Neothesia/pages/video-encoding.html)
+- [Manuale operativo Neothesia Cyma](docs/pages/cyma-operations.md)
 
 ## Thanks to
 
